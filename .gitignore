@@ -416,3 +416,18 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Flutter and Dart
+.dart_tool/
+.flutter-plugins-dependencies
+.idea/
+.pub/
+.pub-cache/
+/android/app/debug
+/android/app/profile
+/android/app/release
+/build/
+/coverage/
+*.iml
+app.*.map.json
+app.*.symbols

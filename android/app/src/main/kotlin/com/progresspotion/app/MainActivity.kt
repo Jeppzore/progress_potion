@@ -1,4 +1,4 @@
-package com.example.progress_potion
+package com.progresspotion.app
 
 import io.flutter.embedding.android.FlutterActivity
 
