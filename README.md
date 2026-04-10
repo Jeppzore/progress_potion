@@ -1,13 +1,14 @@
 # ProgressPotion
 
-ProgressPotion is a Flutter task-tracking MVP with a lightweight game loop. The app supports adding tasks, completing tasks, and filling a potion meter that awards XP during the current session.
+ProgressPotion is a Flutter task-tracking MVP with a lightweight game loop. The app supports adding categorized tasks, completing tasks, and filling a potion meter that awards XP during the current session.
 
 ## Current MVP
 
 - Single-root Flutter project at the repository root
 - Material 3 home flow with a potion progress card and add-task screen
+- Required task categories for Fitness, Study, Work, Hobby, and Home
 - Task domain scaffolding in `lib/models`, `lib/services`, and `lib/controllers`
-- In-memory seeded data plus session-only task creation and completion
+- In-memory seeded data plus session-only task creation, completion, potion rewards, and category variety bonus XP
 - Root-level agent briefs for orchestration, implementation, UX, review, and QA
 
 ## Project structure

@@ -8,18 +8,23 @@ class InMemoryTaskService implements TaskService {
     Task(
       id: 'brew-morning-focus',
       title: 'Brew morning focus',
+      category: TaskCategory.work,
       description: 'Choose the one win that matters most before opening chat.',
       isCompleted: true,
     ),
     Task(
       id: 'refill-water-flask',
       title: 'Refill water flask',
-      description: 'Set yourself up for the next work block with one small reset.',
+      category: TaskCategory.fitness,
+      description:
+          'Set yourself up for the next work block with one small reset.',
     ),
     Task(
       id: 'ship-one-tiny-step',
       title: 'Ship one tiny step',
-      description: 'Finish something concrete, even if it only takes ten minutes.',
+      category: TaskCategory.hobby,
+      description:
+          'Finish something concrete, even if it only takes ten minutes.',
     ),
   ];
 
@@ -28,11 +33,13 @@ class InMemoryTaskService implements TaskService {
   @override
   Future<Task> addTask({
     required String title,
+    required TaskCategory category,
     String description = '',
   }) async {
     final task = Task(
       id: _slugify(title, _tasks.length + 1),
       title: title,
+      category: category,
       description: description,
     );
     _tasks.insert(0, task);

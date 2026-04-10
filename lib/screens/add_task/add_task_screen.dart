@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
+import 'package:progress_potion/models/task.dart';
 
 class AddTaskScreen extends StatefulWidget {
   const AddTaskScreen({super.key, required this.taskController});
@@ -14,6 +15,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+  TaskCategory? _selectedCategory;
   bool _isSaving = false;
 
   @override
@@ -35,6 +37,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
     await widget.taskController.addTask(
       title: _titleController.text,
+      category: _selectedCategory!,
       description: _descriptionController.text,
     );
 
@@ -47,6 +50,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Add task')),
       body: ListView(
@@ -62,14 +67,14 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                   children: [
                     Text(
                       'Brew a task',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 10),
                     Text(
                       'What do you want to brew next?',
-                      style: Theme.of(context).textTheme.bodyLarge,
+                      style: theme.textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 20),
                     TextFormField(
@@ -94,8 +99,81 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                       maxLines: 5,
                       decoration: const InputDecoration(
                         labelText: 'Description',
-                        hintText: 'Add a little context so the next action feels obvious.',
+                        hintText:
+                            'Add a little context so the next action feels obvious.',
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Category',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Variety helps your potion earn bonus XP.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    FormField<TaskCategory>(
+                      initialValue: _selectedCategory,
+                      validator: (value) {
+                        if (value == null) {
+                          return 'Choose a category';
+                        }
+                        return null;
+                      },
+                      builder: (field) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final category in TaskCategory.values)
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      minHeight: 48,
+                                    ),
+                                    child: Semantics(
+                                      selected: field.value == category,
+                                      child: ChoiceChip(
+                                        label: Text(category.displayName),
+                                        selected: field.value == category,
+                                        onSelected: _isSaving
+                                            ? null
+                                            : (isSelected) {
+                                                final selectedCategory =
+                                                    isSelected
+                                                    ? category
+                                                    : null;
+                                                field.didChange(
+                                                  selectedCategory,
+                                                );
+                                                setState(() {
+                                                  _selectedCategory =
+                                                      selectedCategory;
+                                                });
+                                              },
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            if (field.hasError) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                field.errorText!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 24),
                     SizedBox(
@@ -106,7 +184,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.auto_awesome),
                         label: Text(_isSaving ? 'Saving...' : 'Add task'),

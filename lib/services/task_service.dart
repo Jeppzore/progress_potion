@@ -5,6 +5,7 @@ abstract class TaskService {
 
   Future<Task> addTask({
     required String title,
+    required TaskCategory category,
     String description,
   });
 

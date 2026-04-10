@@ -2,11 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:progress_potion/models/task.dart';
 
 class TaskTile extends StatelessWidget {
-  const TaskTile({
-    super.key,
-    required this.task,
-    this.onComplete,
-  });
+  const TaskTile({super.key, required this.task, this.onComplete});
 
   final Task task;
   final VoidCallback? onComplete;
@@ -56,6 +52,27 @@ class TaskTile extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 10),
+            Semantics(
+              label: 'Category ${task.category.displayName}',
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  task.category.displayName,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
             if (task.description.isNotEmpty) ...[
               const SizedBox(height: 10),
