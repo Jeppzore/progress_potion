@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/task_service.dart';
 
 class TaskController extends ChangeNotifier {
@@ -15,10 +16,10 @@ class TaskController extends ChangeNotifier {
   final TaskService _taskService;
 
   bool _isLoading = true;
-  bool _hasSeededPotionCharge = false;
   Object? _error;
   List<Task> _tasks = const [];
   final Set<String> _completingTaskIds = <String>{};
+  bool _isClaimingPotionReward = false;
   List<TaskCategory> _potionChargeCategories = const [];
   int _totalXp = 0;
 
@@ -61,13 +62,10 @@ class TaskController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _tasks = await _taskService.listTasks();
-      if (!_hasSeededPotionCharge) {
-        _potionChargeCategories = [
-          for (final task in completedTasks) task.category,
-        ];
-        _hasSeededPotionCharge = true;
-      }
+      final state = await _taskService.loadState();
+      _tasks = state.tasks;
+      _potionChargeCategories = state.potionChargeCategories;
+      _totalXp = state.totalXp;
     } catch (error) {
       _error = error;
     } finally {
@@ -81,12 +79,16 @@ class TaskController extends ChangeNotifier {
     required TaskCategory category,
     String description = '',
   }) async {
-    final task = await _taskService.addTask(
+    final task = Task(
+      id: _slugify(title, _tasks.length + 1),
       title: title.trim(),
       category: category,
       description: description.trim(),
     );
-    _tasks = [task, ..._tasks];
+
+    final nextTasks = [task, ..._tasks];
+    await _saveState(tasks: nextTasks);
+    _tasks = nextTasks;
     notifyListeners();
   }
 
@@ -101,44 +103,93 @@ class TaskController extends ChangeNotifier {
     _completingTaskIds.add(id);
 
     try {
-      final updatedTask = await _taskService.completeTask(id);
-      if (updatedTask == null) {
-        return;
-      }
-
-      _tasks = [
+      final updatedTask = _tasks[currentIndex].copyWith(isCompleted: true);
+      final nextTasks = [
         for (final task in _tasks)
           if (task.id == id) updatedTask else task,
       ];
-      _potionChargeCategories = [
+      final nextPotionChargeCategories = [
         ..._potionChargeCategories,
         updatedTask.category,
       ];
+
+      await _saveState(
+        tasks: nextTasks,
+        potionChargeCategories: nextPotionChargeCategories,
+      );
+      _tasks = nextTasks;
+      _potionChargeCategories = nextPotionChargeCategories;
       notifyListeners();
     } finally {
       _completingTaskIds.remove(id);
     }
   }
 
-  PotionRewardResult? drinkPotion() {
-    if (!canDrinkPotion) {
+  Future<PotionRewardResult?> drinkPotion() async {
+    if (!canDrinkPotion || _isClaimingPotionReward) {
       return null;
     }
 
-    final consumedCategories = _currentPotionCategories.toList();
-    final uniqueCategoryCount = consumedCategories.toSet().length;
-    final result = PotionRewardResult(
-      baseXp: potionRewardXp,
-      varietyBonusXp: uniqueCategoryCount * varietyBonusXpPerCategory,
-      uniqueCategoryCount: uniqueCategoryCount,
-    );
+    _isClaimingPotionReward = true;
 
-    _potionChargeCategories = _potionChargeCategories
-        .skip(potionCapacity)
-        .toList();
-    _totalXp += result.totalXp;
-    notifyListeners();
-    return result;
+    try {
+      final consumedCategories = _currentPotionCategories.toList();
+      final uniqueCategoryCount = consumedCategories.toSet().length;
+      final result = PotionRewardResult(
+        baseXp: potionRewardXp,
+        varietyBonusXp: uniqueCategoryCount * varietyBonusXpPerCategory,
+        uniqueCategoryCount: uniqueCategoryCount,
+      );
+
+      final nextPotionChargeCategories = _potionChargeCategories
+          .skip(potionCapacity)
+          .toList();
+      final nextTotalXp = _totalXp + result.totalXp;
+
+      await _saveState(
+        totalXp: nextTotalXp,
+        potionChargeCategories: nextPotionChargeCategories,
+      );
+      _potionChargeCategories = nextPotionChargeCategories;
+      _totalXp = nextTotalXp;
+      notifyListeners();
+      return result;
+    } finally {
+      _isClaimingPotionReward = false;
+    }
+  }
+
+  Future<void> _saveState({
+    List<Task>? tasks,
+    int? totalXp,
+    List<TaskCategory>? potionChargeCategories,
+  }) async {
+    await _taskService.saveState(
+      TaskSessionState(
+        tasks: tasks ?? _tasks,
+        totalXp: totalXp ?? _totalXp,
+        potionChargeCategories:
+            potionChargeCategories ?? _potionChargeCategories,
+      ),
+    );
+  }
+
+  String _slugify(String title, int fallbackSuffix) {
+    final normalized = title
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+
+    if (normalized.isEmpty) {
+      return 'task-$fallbackSuffix';
+    }
+
+    if (_tasks.every((task) => task.id != normalized)) {
+      return normalized;
+    }
+
+    return '$normalized-$fallbackSuffix';
   }
 }
 

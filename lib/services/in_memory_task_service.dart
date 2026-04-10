@@ -1,8 +1,21 @@
 import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/task_service.dart';
 
 class InMemoryTaskService implements TaskService {
-  InMemoryTaskService() : _tasks = List<Task>.from(_seedTasks);
+  InMemoryTaskService({TaskSessionState? initialState})
+    : _state = initialState ?? seedState;
+
+  static TaskSessionState get seedState {
+    return TaskSessionState(
+      tasks: _seedTasks,
+      totalXp: 0,
+      potionChargeCategories: [
+        for (final task in _seedTasks)
+          if (task.isCompleted) task.category,
+      ],
+    );
+  }
 
   static const List<Task> _seedTasks = [
     Task(
@@ -28,61 +41,15 @@ class InMemoryTaskService implements TaskService {
     ),
   ];
 
-  final List<Task> _tasks;
+  TaskSessionState _state;
 
   @override
-  Future<Task> addTask({
-    required String title,
-    required TaskCategory category,
-    String description = '',
-  }) async {
-    final task = Task(
-      id: _slugify(title, _tasks.length + 1),
-      title: title,
-      category: category,
-      description: description,
-    );
-    _tasks.insert(0, task);
-    return task;
+  Future<TaskSessionState> loadState() async {
+    return _state;
   }
 
   @override
-  Future<Task?> completeTask(String id) async {
-    final index = _tasks.indexWhere((task) => task.id == id);
-    if (index == -1) {
-      return null;
-    }
-
-    final current = _tasks[index];
-    if (current.isCompleted) {
-      return current;
-    }
-
-    final updated = current.copyWith(isCompleted: true);
-    _tasks[index] = updated;
-    return updated;
-  }
-
-  @override
-  Future<List<Task>> listTasks() async {
-    return List<Task>.unmodifiable(_tasks);
-  }
-
-  String _slugify(String title, int fallbackSuffix) {
-    final normalized = title
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-|-$'), '');
-
-    if (normalized.isEmpty) {
-      return 'task-$fallbackSuffix';
-    }
-
-    if (_tasks.every((task) => task.id != normalized)) {
-      return normalized;
-    }
-
-    return '$normalized-$fallbackSuffix';
+  Future<void> saveState(TaskSessionState state) async {
+    _state = state;
   }
 }

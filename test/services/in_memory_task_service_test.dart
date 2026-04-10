@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/in_memory_task_service.dart';
 
 void main() {
@@ -9,35 +10,43 @@ void main() {
     service = InMemoryTaskService();
   });
 
-  test('listTasks returns the seeded tasks', () async {
-    final tasks = await service.listTasks();
+  test('loadState returns the seeded session state', () async {
+    final state = await service.loadState();
 
-    expect(tasks, hasLength(3));
-    expect(tasks.map((task) => task.title), contains('Brew morning focus'));
-    expect(tasks.map((task) => task.category), contains(TaskCategory.work));
-    expect(tasks.any((task) => task.isCompleted), isTrue);
-  });
-
-  test('addTask inserts a new incomplete task at the top', () async {
-    final created = await service.addTask(
-      title: 'Plan the next sprint',
-      category: TaskCategory.study,
-      description: 'Capture the next three priorities.',
+    expect(state.tasks, hasLength(3));
+    expect(
+      state.tasks.map((task) => task.title),
+      contains('Brew morning focus'),
     );
-    final tasks = await service.listTasks();
-
-    expect(created.title, 'Plan the next sprint');
-    expect(created.category, TaskCategory.study);
-    expect(created.isCompleted, isFalse);
-    expect(tasks.first.title, 'Plan the next sprint');
-    expect(tasks.first.category, TaskCategory.study);
+    expect(
+      state.tasks.map((task) => task.category),
+      contains(TaskCategory.work),
+    );
+    expect(state.tasks.any((task) => task.isCompleted), isTrue);
+    expect(state.totalXp, 0);
+    expect(state.potionChargeCategories, [TaskCategory.work]);
   });
 
-  test('completeTask marks a task complete and is idempotent', () async {
-    final firstCompletion = await service.completeTask('ship-one-tiny-step');
-    final secondCompletion = await service.completeTask('ship-one-tiny-step');
+  test('saveState replaces the current in-memory snapshot', () async {
+    final nextState = TaskSessionState(
+      tasks: const [
+        Task(
+          id: 'plan-the-next-sprint',
+          title: 'Plan the next sprint',
+          category: TaskCategory.study,
+          description: 'Capture the next three priorities.',
+        ),
+      ],
+      totalXp: 40,
+      potionChargeCategories: const [TaskCategory.study],
+    );
 
-    expect(firstCompletion?.isCompleted, isTrue);
-    expect(secondCompletion?.isCompleted, isTrue);
+    await service.saveState(nextState);
+    final state = await service.loadState();
+
+    expect(state.tasks.first.title, 'Plan the next sprint');
+    expect(state.tasks.first.category, TaskCategory.study);
+    expect(state.totalXp, 40);
+    expect(state.potionChargeCategories, [TaskCategory.study]);
   });
 }

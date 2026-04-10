@@ -1,13 +1,7 @@
-import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/models/task_session_state.dart';
 
 abstract class TaskService {
-  Future<List<Task>> listTasks();
+  Future<TaskSessionState> loadState();
 
-  Future<Task> addTask({
-    required String title,
-    required TaskCategory category,
-    String description,
-  });
-
-  Future<Task?> completeTask(String id);
+  Future<void> saveState(TaskSessionState state);
 }

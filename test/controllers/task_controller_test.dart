@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
 import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/in_memory_task_service.dart';
 
 void main() {
@@ -108,7 +109,7 @@ void main() {
       expect(controller.currentPotionUniqueCategoryCount, 3);
       expect(controller.currentPotionVarietyBonusXp, 15);
 
-      final reward = controller.drinkPotion();
+      final reward = await controller.drinkPotion();
 
       expect(reward?.baseXp, TaskController.potionRewardXp);
       expect(reward?.varietyBonusXp, 15);
@@ -145,7 +146,7 @@ void main() {
     expect(controller.currentPotionUniqueCategoryCount, 2);
     expect(controller.currentPotionVarietyBonusXp, 10);
 
-    final reward = controller.drinkPotion();
+    final reward = await controller.drinkPotion();
 
     expect(reward?.varietyBonusXp, 10);
     expect(reward?.totalXp, 40);
@@ -156,10 +157,98 @@ void main() {
   test('drinkPotion does nothing when the potion is not full', () async {
     await controller.loadTasks();
 
-    final reward = controller.drinkPotion();
+    final reward = await controller.drinkPotion();
 
     expect(reward, isNull);
     expect(controller.totalXp, 0);
     expect(controller.potionChargeCount, 1);
+  });
+
+  test('addTask persists through a new controller instance', () async {
+    final service = InMemoryTaskService();
+    final firstController = TaskController(taskService: service);
+    await firstController.loadTasks();
+
+    await firstController.addTask(
+      title: 'Persist this task',
+      category: TaskCategory.home,
+      description: 'It should survive the next controller.',
+    );
+
+    final secondController = TaskController(taskService: service);
+    await secondController.loadTasks();
+
+    expect(secondController.totalCount, 4);
+    expect(secondController.activeTasks.first.title, 'Persist this task');
+    expect(secondController.activeTasks.first.category, TaskCategory.home);
+  });
+
+  test('completeTask persists completion and potion charge queue', () async {
+    final service = InMemoryTaskService();
+    final firstController = TaskController(taskService: service);
+    await firstController.loadTasks();
+
+    await firstController.completeTask('refill-water-flask');
+
+    final secondController = TaskController(taskService: service);
+    await secondController.loadTasks();
+
+    expect(secondController.completedCount, 2);
+    expect(secondController.potionChargeCategories, [
+      TaskCategory.work,
+      TaskCategory.fitness,
+    ]);
+  });
+
+  test('drinkPotion persists XP and overflow categories', () async {
+    final service = InMemoryTaskService(
+      initialState: TaskSessionState(
+        tasks: [
+          const Task(
+            id: 'one',
+            title: 'One',
+            category: TaskCategory.work,
+            isCompleted: true,
+          ),
+          const Task(
+            id: 'two',
+            title: 'Two',
+            category: TaskCategory.study,
+            isCompleted: true,
+          ),
+          const Task(
+            id: 'three',
+            title: 'Three',
+            category: TaskCategory.home,
+            isCompleted: true,
+          ),
+          const Task(
+            id: 'four',
+            title: 'Four',
+            category: TaskCategory.fitness,
+            isCompleted: true,
+          ),
+        ],
+        totalXp: 5,
+        potionChargeCategories: [
+          TaskCategory.work,
+          TaskCategory.study,
+          TaskCategory.home,
+          TaskCategory.fitness,
+        ],
+      ),
+    );
+    final firstController = TaskController(taskService: service);
+    await firstController.loadTasks();
+
+    final reward = await firstController.drinkPotion();
+
+    expect(reward?.totalXp, 45);
+
+    final secondController = TaskController(taskService: service);
+    await secondController.loadTasks();
+
+    expect(secondController.totalXp, 50);
+    expect(secondController.potionChargeCategories, [TaskCategory.fitness]);
   });
 }

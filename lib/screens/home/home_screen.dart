@@ -20,14 +20,19 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final reward = widget.taskController.drinkPotion();
-    if (reward == null) {
-      return;
-    }
-
     setState(() {
       _isDrinkingPotion = true;
     });
+
+    final reward = await widget.taskController.drinkPotion();
+    if (reward == null) {
+      if (mounted) {
+        setState(() {
+          _isDrinkingPotion = false;
+        });
+      }
+      return;
+    }
 
     await Future<void>.delayed(const Duration(milliseconds: 300));
     if (!context.mounted) {

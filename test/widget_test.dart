@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:progress_potion/app/progress_potion_app.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
+import 'package:progress_potion/services/shared_preferences_task_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('renders the home loop with potion progress and tasks', (
@@ -65,6 +67,45 @@ void main() {
       homeScreen.taskController.activeTasks.first.category,
       TaskCategory.study,
     );
+  });
+
+  testWidgets('persists a task added from the UI after app rebuild', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProgressPotionApp(
+        taskService: SharedPreferencesTaskService(preferences: preferences),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add task'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Task title'),
+      'Persist widget task',
+    );
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Add task'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Persist widget task'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      ProgressPotionApp(
+        taskService: SharedPreferencesTaskService(preferences: preferences),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Persist widget task'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
   });
 
   testWidgets(
