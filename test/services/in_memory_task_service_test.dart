@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/in_memory_task_service.dart';
@@ -24,6 +25,7 @@ void main() {
     );
     expect(state.tasks.any((task) => task.isCompleted), isTrue);
     expect(state.totalXp, 0);
+    expect(state.stats, CharacterStats.zero);
     expect(state.potionChargeCategories, [TaskCategory.work]);
   });
 
@@ -38,6 +40,12 @@ void main() {
         ),
       ],
       totalXp: 40,
+      stats: const CharacterStats(
+        strength: 1,
+        vitality: 2,
+        wisdom: 3,
+        mindfulness: 4,
+      ),
       potionChargeCategories: const [TaskCategory.study],
     );
 
@@ -47,6 +55,7 @@ void main() {
     expect(state.tasks.first.title, 'Plan the next sprint');
     expect(state.tasks.first.category, TaskCategory.study);
     expect(state.totalXp, 40);
+    expect(state.stats.wisdom, 3);
     expect(state.potionChargeCategories, [TaskCategory.study]);
   });
 }

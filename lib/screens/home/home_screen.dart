@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
 import 'package:progress_potion/widgets/potion_progress_card.dart';
+import 'package:progress_potion/widgets/potion_reward_dialog.dart';
 import 'package:progress_potion/widgets/task_tile.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -14,11 +15,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isDrinkingPotion = false;
+  int _celebrationCount = 0;
 
   Future<void> _drinkPotion(BuildContext context) async {
     if (_isDrinkingPotion) {
       return;
     }
+
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     setState(() {
       _isDrinkingPotion = true;
@@ -34,34 +38,29 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (mounted) {
+      setState(() {
+        _celebrationCount += 1;
+      });
+    }
+
+    final delay = disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+
     if (!context.mounted) {
       return;
     }
 
-    final categoryLabel = reward.uniqueCategoryCount == 1
-        ? 'category'
-        : 'categories';
-
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Potion claimed'),
-          content: Text(
-            'Base reward: +${reward.baseXp} XP\n'
-            'Variety bonus: +${reward.varietyBonusXp} XP '
-            '(${reward.uniqueCategoryCount} $categoryLabel)\n'
-            'Total gained: +${reward.totalXp} XP\n'
-            'Total XP: ${widget.taskController.totalXp}\n\n'
-            'Your next potion is already brewing.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Nice'),
-            ),
-          ],
+        return PotionRewardDialog(
+          reward: reward,
+          totalXp: widget.taskController.totalXp,
         );
       },
     );
@@ -95,62 +94,92 @@ class _HomeScreenState extends State<HomeScreen> {
         final activeTasks = widget.taskController.activeTasks;
         final completedTasks = widget.taskController.completedTasks;
 
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-          children: [
-            PotionProgressCard(
-              xp: widget.taskController.totalXp,
-              progress: widget.taskController.potionProgress,
-              potionChargeCount: widget.taskController.potionChargeCount,
-              potionCapacity: TaskController.potionCapacity,
-              baseRewardXp: TaskController.potionRewardXp,
-              varietyBonusXp: widget.taskController.currentPotionVarietyBonusXp,
-              varietyCategoryCount:
-                  widget.taskController.currentPotionUniqueCategoryCount,
-              canDrinkPotion: widget.taskController.canDrinkPotion,
-              isDrinkingPotion: _isDrinkingPotion,
-              onDrinkPotion: () => _drinkPotion(context),
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFF7F2E9), Color(0xFFF1E8DA)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
-            const SizedBox(height: 24),
-            _SectionHeader(
-              title: 'Active Tasks',
-              subtitle: activeTasks.isEmpty
-                  ? 'No active tasks yet. Add one to start brewing.'
-                  : 'Complete tasks to fill the potion.',
-            ),
-            const SizedBox(height: 12),
-            if (activeTasks.isEmpty)
-              const _EmptyStateCard(
-                title: 'No active tasks',
-                message:
-                    'Tap Add task to brew a fresh objective for this session.',
-              )
-            else
-              for (final task in activeTasks) ...[
-                TaskTile(
-                  task: task,
-                  onComplete: () => widget.taskController.completeTask(task.id),
-                ),
-                const SizedBox(height: 12),
-              ],
-            const SizedBox(height: 24),
-            const _SectionHeader(
-              title: 'Completed Tasks',
-              subtitle: 'Completed tasks will appear here once you finish one.',
-            ),
-            const SizedBox(height: 12),
-            if (completedTasks.isEmpty)
-              const _EmptyStateCard(
-                title: 'Nothing completed yet',
-                message:
-                    'Complete an active task to earn XP and bottle progress.',
-              )
-            else
-              for (final task in completedTasks) ...[
-                TaskTile(task: task),
-                const SizedBox(height: 12),
-              ],
-          ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                top: -120,
+                right: -40,
+                child: _BackdropGlow(size: 280, color: const Color(0x334B8B70)),
+              ),
+              Positioned(
+                top: 90,
+                left: -60,
+                child: _BackdropGlow(size: 220, color: const Color(0x22E06B4C)),
+              ),
+              ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+                children: [
+                  PotionProgressCard(
+                    xp: widget.taskController.totalXp,
+                    stats: widget.taskController.stats,
+                    progress: widget.taskController.potionProgress,
+                    potionChargeCount: widget.taskController.potionChargeCount,
+                    potionCapacity: TaskController.potionCapacity,
+                    currentPotionCategories:
+                        widget.taskController.currentPotionCategories,
+                    baseRewardXp: TaskController.potionRewardXp,
+                    varietyBonusXp:
+                        widget.taskController.currentPotionVarietyBonusXp,
+                    varietyCategoryCount:
+                        widget.taskController.currentPotionUniqueCategoryCount,
+                    canDrinkPotion: widget.taskController.canDrinkPotion,
+                    isDrinkingPotion: _isDrinkingPotion,
+                    celebrationCount: _celebrationCount,
+                    onDrinkPotion: () => _drinkPotion(context),
+                  ),
+                  const SizedBox(height: 24),
+                  _SectionHeader(
+                    title: 'Active Tasks',
+                    subtitle: activeTasks.isEmpty
+                        ? 'No active tasks yet. Add one to start brewing.'
+                        : 'Complete tasks to fill the potion with category energy.',
+                  ),
+                  const SizedBox(height: 12),
+                  if (activeTasks.isEmpty)
+                    const _EmptyStateCard(
+                      title: 'No active tasks',
+                      message:
+                          'Tap Add task to brew a fresh objective for this session.',
+                    )
+                  else
+                    for (final task in activeTasks) ...[
+                      TaskTile(
+                        task: task,
+                        onComplete: () =>
+                            widget.taskController.completeTask(task.id),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  const SizedBox(height: 28),
+                  const _SectionHeader(
+                    title: 'Completed Tasks',
+                    subtitle:
+                        'Finished tasks stay here and their energy remains stored in the potion queue.',
+                  ),
+                  const SizedBox(height: 12),
+                  if (completedTasks.isEmpty)
+                    const _EmptyStateCard(
+                      title: 'Nothing completed yet',
+                      message:
+                          'Complete an active task to store a charge toward your next potion.',
+                    )
+                  else
+                    for (final task in completedTasks) ...[
+                      TaskTile(task: task),
+                      const SizedBox(height: 12),
+                    ],
+                ],
+              ),
+            ],
+          ),
         );
       },
     );
@@ -165,17 +194,19 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
         ),
         const SizedBox(height: 6),
-        Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+        Text(subtitle, style: theme.textTheme.bodyMedium),
       ],
     );
   }
@@ -199,7 +230,7 @@ class _EmptyStateCard extends StatelessWidget {
               title,
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text(message, style: Theme.of(context).textTheme.bodyMedium),
@@ -245,6 +276,27 @@ class _AsyncStateMessage extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BackdropGlow extends StatelessWidget {
+  const _BackdropGlow({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
         ),
       ),
     );

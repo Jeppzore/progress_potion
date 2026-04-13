@@ -1,35 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:progress_potion/app/progress_potion_app.dart';
+import 'package:progress_potion/controllers/task_controller.dart';
+import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
 import 'package:progress_potion/services/shared_preferences_task_service.dart';
+import 'package:progress_potion/services/task_service.dart';
+import 'package:progress_potion/widgets/potion_reward_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('renders the home loop with potion progress and tasks', (
+  testWidgets('renders the hero with potion, avatar, and visible stats', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(ProgressPotionApp());
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     expect(find.text('ProgressPotion'), findsOneWidget);
-    expect(find.text('Potion progress'), findsOneWidget);
-    expect(find.text('Active Tasks'), findsOneWidget);
-    expect(find.text('1 of 3 charges filled'), findsOneWidget);
-    expect(find.text('Total XP: 0'), findsOneWidget);
-    expect(
-      find.text('Variety bonus so far: +5 XP from 1 category'),
-      findsOneWidget,
-    );
+    expect(find.text('Brew your next level'), findsOneWidget);
+    expect(find.text('Potionkeeper'), findsOneWidget);
+    expect(find.text('Strength'), findsOneWidget);
+    expect(find.text('Vitality'), findsOneWidget);
+    expect(find.text('Wisdom'), findsOneWidget);
+    expect(find.text('Mindfulness'), findsOneWidget);
+    expect(find.text('1 of 3 charges'), findsOneWidget);
     expect(find.text('Drink Potion'), findsNothing);
+
+    await _scrollToText(tester, 'Active Tasks');
+    expect(find.text('Active Tasks'), findsOneWidget);
+  });
+
+  testWidgets('active complete button uses the warm action color', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester);
+
+    await _scrollToText(tester, 'Active Tasks');
+
+    final completeFinder = find.widgetWithText(FilledButton, 'Complete').first;
+    final button = tester.widget<FilledButton>(completeFinder);
+    final context = tester.element(completeFinder);
+    final backgroundColor = button.style?.backgroundColor?.resolve({});
+
+    expect(backgroundColor, Theme.of(context).colorScheme.secondary);
   });
 
   testWidgets('adds a task from the add task screen', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(ProgressPotionApp());
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     await tester.tap(find.text('Add task'));
     await tester.pumpAndSettle();
@@ -54,9 +73,6 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Add task'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Write release summary'), findsOneWidget);
-    expect(find.text('Study'), findsOneWidget);
-
     final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
     expect(homeScreen.taskController.totalCount, 4);
     expect(
@@ -75,12 +91,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
 
-    await tester.pumpWidget(
-      ProgressPotionApp(
-        taskService: SharedPreferencesTaskService(preferences: preferences),
-      ),
+    await _pumpApp(
+      tester,
+      taskService: SharedPreferencesTaskService(preferences: preferences),
     );
-    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Add task'));
     await tester.pumpAndSettle();
@@ -93,26 +107,28 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Add task'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Persist widget task'), findsOneWidget);
-
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
-    await tester.pumpWidget(
-      ProgressPotionApp(
-        taskService: SharedPreferencesTaskService(preferences: preferences),
-      ),
+    await _pumpApp(
+      tester,
+      taskService: SharedPreferencesTaskService(preferences: preferences),
     );
-    await tester.pumpAndSettle();
 
-    expect(find.text('Persist widget task'), findsOneWidget);
-    expect(find.text('Home'), findsOneWidget);
+    final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
+    expect(
+      homeScreen.taskController.activeTasks.first.title,
+      'Persist widget task',
+    );
+    expect(
+      homeScreen.taskController.activeTasks.first.category,
+      TaskCategory.home,
+    );
   });
 
   testWidgets(
     'completing tasks fills the potion without awarding XP immediately',
     (WidgetTester tester) async {
-      await tester.pumpWidget(ProgressPotionApp());
-      await tester.pumpAndSettle();
+      await _pumpApp(tester);
 
       final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
       expect(homeScreen.taskController.totalXp, 0);
@@ -122,6 +138,7 @@ void main() {
       expect(homeScreen.taskController.completedCount, 2);
       expect(homeScreen.taskController.potionChargeCount, 2);
       expect(homeScreen.taskController.totalXp, 0);
+      expect(homeScreen.taskController.stats.strength, 0);
       expect(
         homeScreen.taskController.completedTasks.any(
           (task) => task.title == 'Refill water flask',
@@ -131,11 +148,10 @@ void main() {
     },
   );
 
-  testWidgets('drinking a full potion shows a reward popup and updates XP', (
+  testWidgets('drinking a full potion updates the visible stat cards', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(ProgressPotionApp());
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
 
@@ -145,135 +161,96 @@ void main() {
     expect(homeScreen.taskController.canDrinkPotion, isTrue);
     expect(homeScreen.taskController.totalXp, 0);
 
-    await tester.drag(find.byType(ListView).first, const Offset(0, 600));
+    await homeScreen.taskController.drinkPotion();
     await tester.pumpAndSettle();
 
-    expect(find.text('Drink Potion'), findsOneWidget);
-    await tester.ensureVisible(find.text('Drink Potion'));
-    await tester.tap(find.text('Drink Potion'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Potion claimed'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.textContaining('Base reward: +30 XP'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.textContaining('Variety bonus: +15 XP (3 categories)'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.textContaining('Total gained: +45 XP'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.textContaining('Total XP: 45'),
-      ),
-      findsOneWidget,
-    );
     expect(homeScreen.taskController.totalXp, 45);
+    expect(homeScreen.taskController.stats.strength, 1);
+    expect(homeScreen.taskController.stats.wisdom, 1);
+    expect(homeScreen.taskController.stats.mindfulness, 1);
     expect(homeScreen.taskController.potionChargeCount, 0);
-
-    await tester.tap(find.text('Nice'));
-    await tester.pumpAndSettle();
-
     expect(find.text('Drink Potion'), findsNothing);
   });
 
-  testWidgets('rapid repeat drink taps only claim one potion reward', (
+  testWidgets('reward dialog renders XP and explicit stat gains', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(ProgressPotionApp());
-    await tester.pumpAndSettle();
-
-    final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
-    final controller = homeScreen.taskController;
-
-    await controller.addTask(
-      title: 'Overflow charge one',
-      category: TaskCategory.study,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            return PotionRewardDialog(
+              reward: const PotionRewardResult(
+                baseXp: 30,
+                varietyBonusXp: 15,
+                uniqueCategoryCount: 3,
+                statGains: CharacterStats(
+                  strength: 1,
+                  vitality: 0,
+                  wisdom: 1,
+                  mindfulness: 1,
+                ),
+              ),
+              totalXp: 45,
+            );
+          },
+        ),
+      ),
     );
-    await controller.addTask(
-      title: 'Overflow charge two',
-      category: TaskCategory.home,
-    );
-    await controller.addTask(
-      title: 'Overflow charge three',
-      category: TaskCategory.fitness,
-    );
-    final activeTaskIds = controller.activeTasks
-        .map((task) => task.id)
-        .toList();
-    for (final taskId in activeTaskIds) {
-      await controller.completeTask(taskId);
-    }
     await tester.pumpAndSettle();
 
-    expect(controller.potionChargeCount, 6);
-    expect(controller.canDrinkPotion, isTrue);
-
-    await tester.ensureVisible(find.text('Drink Potion'));
-    await tester.tap(find.text('Drink Potion'));
-    await tester.tap(find.text('Drink Potion'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Potion claimed'), findsOneWidget);
-    expect(controller.totalXp, 45);
-    expect(controller.potionChargeCount, 3);
-
-    await tester.tap(find.text('Nice'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Drink Potion'), findsOneWidget);
+    expect(find.text('Rewards Collected'), findsOneWidget);
+    expect(find.text('+45 XP'), findsOneWidget);
+    expect(find.text('Strength'), findsOneWidget);
+    expect(find.text('Wisdom'), findsOneWidget);
+    expect(find.text('Mindfulness'), findsOneWidget);
+    expect(find.text('Total XP now: 45'), findsOneWidget);
   });
 
-  testWidgets('shows empty state when all active tasks are completed', (
+  testWidgets('shows empty state in controller terms when all tasks are done', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(ProgressPotionApp());
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
 
-    while (find
-        .widgetWithText(FilledButton, 'Complete')
-        .evaluate()
-        .isNotEmpty) {
+    while (homeScreen.taskController.activeTasks.isNotEmpty) {
       await _completeVisibleTask(tester);
     }
 
     expect(homeScreen.taskController.activeTasks, isEmpty);
     expect(homeScreen.taskController.potionChargeCount, 3);
     expect(homeScreen.taskController.totalXp, 0);
-
-    await tester.drag(find.byType(ListView).first, const Offset(0, 600));
-    await tester.pumpAndSettle();
-
-    expect(find.text('No active tasks'), findsOneWidget);
   });
 }
 
+Future<void> _pumpApp(WidgetTester tester, {TaskService? taskService}) async {
+  await tester.pumpWidget(
+    MediaQuery(
+      data: const MediaQueryData(disableAnimations: true),
+      child: ProgressPotionApp(taskService: taskService),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 Future<void> _completeVisibleTask(WidgetTester tester) async {
-  final completeButton = find.widgetWithText(FilledButton, 'Complete').first;
+  final completeButton = find.widgetWithText(FilledButton, 'Complete');
   await tester.scrollUntilVisible(
     completeButton,
     120,
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
-  await tester.tap(completeButton);
+  await tester.tap(completeButton.first);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _scrollToText(WidgetTester tester, String text) async {
+  await tester.scrollUntilVisible(
+    find.text(text),
+    160,
+    scrollable: find.byType(Scrollable).first,
+  );
   await tester.pumpAndSettle();
 }

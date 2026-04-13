@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/task_service.dart';
@@ -22,6 +23,7 @@ class TaskController extends ChangeNotifier {
   bool _isClaimingPotionReward = false;
   List<TaskCategory> _potionChargeCategories = const [];
   int _totalXp = 0;
+  CharacterStats _stats = CharacterStats.zero;
 
   bool get isLoading => _isLoading;
   Object? get error => _error;
@@ -37,8 +39,13 @@ class TaskController extends ChangeNotifier {
     return UnmodifiableListView(_potionChargeCategories);
   }
 
+  UnmodifiableListView<TaskCategory> get currentPotionCategories {
+    return UnmodifiableListView(_currentPotionCategories.toList());
+  }
+
   int get totalXp => _totalXp;
   int get xp => totalXp;
+  CharacterStats get stats => _stats;
   bool get canDrinkPotion => potionChargeCount >= potionCapacity;
   int get currentPotionUniqueCategoryCount {
     return _currentPotionCategories.toSet().length;
@@ -66,6 +73,7 @@ class TaskController extends ChangeNotifier {
       _tasks = state.tasks;
       _potionChargeCategories = state.potionChargeCategories;
       _totalXp = state.totalXp;
+      _stats = state.stats;
     } catch (error) {
       _error = error;
     } finally {
@@ -135,23 +143,28 @@ class TaskController extends ChangeNotifier {
     try {
       final consumedCategories = _currentPotionCategories.toList();
       final uniqueCategoryCount = consumedCategories.toSet().length;
+      final statGains = CharacterStats.fromCategories(consumedCategories);
       final result = PotionRewardResult(
         baseXp: potionRewardXp,
         varietyBonusXp: uniqueCategoryCount * varietyBonusXpPerCategory,
         uniqueCategoryCount: uniqueCategoryCount,
+        statGains: statGains,
       );
 
       final nextPotionChargeCategories = _potionChargeCategories
           .skip(potionCapacity)
           .toList();
       final nextTotalXp = _totalXp + result.totalXp;
+      final nextStats = _stats.add(statGains);
 
       await _saveState(
         totalXp: nextTotalXp,
+        stats: nextStats,
         potionChargeCategories: nextPotionChargeCategories,
       );
       _potionChargeCategories = nextPotionChargeCategories;
       _totalXp = nextTotalXp;
+      _stats = nextStats;
       notifyListeners();
       return result;
     } finally {
@@ -162,12 +175,14 @@ class TaskController extends ChangeNotifier {
   Future<void> _saveState({
     List<Task>? tasks,
     int? totalXp,
+    CharacterStats? stats,
     List<TaskCategory>? potionChargeCategories,
   }) async {
     await _taskService.saveState(
       TaskSessionState(
         tasks: tasks ?? _tasks,
         totalXp: totalXp ?? _totalXp,
+        stats: stats ?? _stats,
         potionChargeCategories:
             potionChargeCategories ?? _potionChargeCategories,
       ),
@@ -198,11 +213,13 @@ class PotionRewardResult {
     required this.baseXp,
     required this.varietyBonusXp,
     required this.uniqueCategoryCount,
+    required this.statGains,
   });
 
   final int baseXp;
   final int varietyBonusXp;
   final int uniqueCategoryCount;
+  final CharacterStats statGains;
 
   int get totalXp => baseXp + varietyBonusXp;
 }

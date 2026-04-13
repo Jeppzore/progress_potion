@@ -1,3 +1,4 @@
+import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/task_service.dart';
@@ -10,6 +11,7 @@ class InMemoryTaskService implements TaskService {
     return TaskSessionState(
       tasks: _seedTasks,
       totalXp: 0,
+      stats: CharacterStats.zero,
       potionChargeCategories: [
         for (final task in _seedTasks)
           if (task.isCompleted) task.category,

@@ -9,25 +9,34 @@ class SharedPreferencesTaskService implements TaskService {
   SharedPreferencesTaskService({required SharedPreferences preferences})
     : _preferences = preferences;
 
-  static const String storageKey = 'progress_potion.session.v1';
+  static const String storageKey = 'progress_potion.session.v2';
+  static const String legacyStorageKey = 'progress_potion.session.v1';
 
   final SharedPreferences _preferences;
 
   @override
   Future<TaskSessionState> loadState() async {
     final savedState = _preferences.getString(storageKey);
-    if (savedState == null) {
+    final legacyState = _preferences.getString(legacyStorageKey);
+    final rawState = savedState ?? legacyState;
+    if (rawState == null) {
       final seedState = InMemoryTaskService.seedState;
       await saveState(seedState);
       return seedState;
     }
 
-    final decoded = jsonDecode(savedState);
+    final decoded = jsonDecode(rawState);
     if (decoded is! Map) {
       throw const FormatException('Saved task session must be a JSON object.');
     }
 
-    return TaskSessionState.fromJson(Map<String, Object?>.from(decoded));
+    final state = TaskSessionState.fromJson(Map<String, Object?>.from(decoded));
+
+    if (savedState == null) {
+      await saveState(state);
+    }
+
+    return state;
   }
 
   @override
@@ -38,6 +47,10 @@ class SharedPreferencesTaskService implements TaskService {
     );
     if (!didSave) {
       throw StateError('Could not save task session.');
+    }
+
+    if (_preferences.containsKey(legacyStorageKey)) {
+      await _preferences.remove(legacyStorageKey);
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
+import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/in_memory_task_service.dart';
@@ -18,8 +19,10 @@ void main() {
     expect(controller.completedCount, 1);
     expect(controller.potionChargeCount, 1);
     expect(controller.potionChargeCategories, [TaskCategory.work]);
+    expect(controller.currentPotionCategories, [TaskCategory.work]);
     expect(controller.currentPotionVarietyBonusXp, 5);
     expect(controller.totalXp, 0);
+    expect(controller.stats.strength, 0);
     expect(controller.potionProgress, closeTo(1 / 3, 0.0001));
   });
 
@@ -65,6 +68,7 @@ void main() {
     expect(controller.potionProgress, 1);
     expect(controller.canDrinkPotion, isTrue);
     expect(controller.totalXp, 0);
+    expect(controller.stats.mindfulness, 0);
   });
 
   test(
@@ -83,11 +87,12 @@ void main() {
         TaskCategory.fitness,
       ]);
       expect(controller.totalXp, 0);
+      expect(controller.stats.strength, 0);
     },
   );
 
   test(
-    'drinkPotion adds XP, consumes one full potion, and preserves overflow categories',
+    'drinkPotion adds XP, grants stat gains, and preserves overflow categories',
     () async {
       await controller.loadTasks();
 
@@ -115,7 +120,15 @@ void main() {
       expect(reward?.varietyBonusXp, 15);
       expect(reward?.uniqueCategoryCount, 3);
       expect(reward?.totalXp, 45);
+      expect(reward?.statGains.strength, 1);
+      expect(reward?.statGains.wisdom, 1);
+      expect(reward?.statGains.mindfulness, 1);
+      expect(reward?.statGains.vitality, 0);
       expect(controller.totalXp, 45);
+      expect(controller.stats.strength, 1);
+      expect(controller.stats.wisdom, 1);
+      expect(controller.stats.mindfulness, 1);
+      expect(controller.stats.vitality, 0);
       expect(controller.potionChargeCount, 2);
       expect(controller.potionChargeCategories, [
         TaskCategory.study,
@@ -150,7 +163,11 @@ void main() {
 
     expect(reward?.varietyBonusXp, 10);
     expect(reward?.totalXp, 40);
+    expect(reward?.statGains.wisdom, 2);
+    expect(reward?.statGains.strength, 1);
     expect(controller.totalXp, 40);
+    expect(controller.stats.wisdom, 2);
+    expect(controller.stats.strength, 1);
     expect(controller.potionChargeCount, 0);
   });
 
@@ -161,6 +178,7 @@ void main() {
 
     expect(reward, isNull);
     expect(controller.totalXp, 0);
+    expect(controller.stats, CharacterStats.zero);
     expect(controller.potionChargeCount, 1);
   });
 
@@ -198,9 +216,10 @@ void main() {
       TaskCategory.work,
       TaskCategory.fitness,
     ]);
+    expect(secondController.stats.strength, 0);
   });
 
-  test('drinkPotion persists XP and overflow categories', () async {
+  test('drinkPotion persists XP, stats, and overflow categories', () async {
     final service = InMemoryTaskService(
       initialState: TaskSessionState(
         tasks: [
@@ -230,6 +249,12 @@ void main() {
           ),
         ],
         totalXp: 5,
+        stats: const CharacterStats(
+          strength: 1,
+          vitality: 0,
+          wisdom: 2,
+          mindfulness: 0,
+        ),
         potionChargeCategories: [
           TaskCategory.work,
           TaskCategory.study,
@@ -244,11 +269,16 @@ void main() {
     final reward = await firstController.drinkPotion();
 
     expect(reward?.totalXp, 45);
+    expect(reward?.statGains.wisdom, 2);
+    expect(reward?.statGains.vitality, 1);
 
     final secondController = TaskController(taskService: service);
     await secondController.loadTasks();
 
     expect(secondController.totalXp, 50);
+    expect(secondController.stats.strength, 1);
+    expect(secondController.stats.vitality, 1);
+    expect(secondController.stats.wisdom, 4);
     expect(secondController.potionChargeCategories, [TaskCategory.fitness]);
   });
 }
