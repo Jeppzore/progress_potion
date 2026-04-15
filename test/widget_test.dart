@@ -78,6 +78,66 @@ void main() {
     expect(_toggleColor(tester, characterToggle), selectedColor);
   });
 
+  testWidgets(
+    'character page grows to fit wrapped stat cards on narrow screens',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: MediaQueryData(
+            size: const Size(360, 1400),
+            disableAnimations: true,
+            textScaler: TextScaler.linear(1.4),
+          ),
+          child: MaterialApp(
+            home: Scaffold(
+              body: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  PotionProgressCard(
+                    xp: 2500000,
+                    stats: const CharacterStats(
+                      strength: 1200000,
+                      vitality: 2300000,
+                      wisdom: 3400000,
+                      mindfulness: 4500000,
+                    ),
+                    progress: 0.33,
+                    potionChargeCount: 1,
+                    potionCapacity: TaskController.potionCapacity,
+                    currentPotionCategories: const [TaskCategory.fitness],
+                    baseRewardXp: TaskController.potionRewardXp,
+                    varietyBonusXp: 10,
+                    varietyCategoryCount: 1,
+                    canDrinkPotion: false,
+                    isDrinkingPotion: false,
+                    celebrationCount: 0,
+                    onDrinkPotion: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final heroViewFinder = find.byKey(const ValueKey('hero-page-view'));
+      final potionHeight = tester.getSize(heroViewFinder).height;
+
+      await tester.ensureVisible(find.text('Character'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Character'));
+      await tester.pumpAndSettle();
+
+      final characterHeight = tester.getSize(heroViewFinder).height;
+
+      expect(characterHeight, greaterThan(potionHeight));
+      expect(find.text('1.2M'), findsOneWidget);
+      expect(find.text('4.5M'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('tapping an incomplete potion jiggles it without drinking', (
     WidgetTester tester,
   ) async {
@@ -394,7 +454,9 @@ void main() {
   ) async {
     final semanticsHandle = tester.ensureSemantics();
 
-    await tester.pumpWidget(const _CharacterAvatarHarness(disableAnimations: true));
+    await tester.pumpWidget(
+      const _CharacterAvatarHarness(disableAnimations: true),
+    );
     await tester.pumpAndSettle();
 
     final semantics = tester.getSemantics(
@@ -410,35 +472,36 @@ void main() {
     semanticsHandle.dispose();
   });
 
-  testWidgets('character page wires avatar tap feedback through the hero view', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(tester);
+  testWidgets(
+    'character page wires avatar tap feedback through the hero view',
+    (WidgetTester tester) async {
+      await _pumpApp(tester);
 
-    await tester.ensureVisible(find.text('Character'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Character'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('avatar-tap-target')),
-      -120,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Character'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Character'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('avatar-tap-target')),
+        -120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Tap for a wave'), findsOneWidget);
-    expect(find.byKey(const ValueKey('avatar-tap-target')), findsOneWidget);
+      expect(find.text('Tap for a wave'), findsOneWidget);
+      expect(find.byKey(const ValueKey('avatar-tap-target')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 1));
+      await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1));
 
-    expect(
-      find.byKey(const ValueKey('avatar-reduced-motion-pulse')),
-      findsOneWidget,
-    );
-    await tester.pump(const Duration(milliseconds: 220));
-  });
+      expect(
+        find.byKey(const ValueKey('avatar-reduced-motion-pulse')),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(milliseconds: 220));
+    },
+  );
 
   testWidgets('adds a task from the add task screen', (
     WidgetTester tester,
@@ -653,6 +716,7 @@ Future<void> _pumpPotionCard(
   int potionChargeCount = 1,
   List<TaskCategory> currentPotionCategories = const [TaskCategory.fitness],
   bool canDrinkPotion = false,
+  CharacterStats stats = CharacterStats.zero,
   VoidCallback? onDrinkPotion,
 }) async {
   await tester.pumpWidget(
@@ -665,7 +729,7 @@ Future<void> _pumpPotionCard(
             children: [
               PotionProgressCard(
                 xp: 12,
-                stats: CharacterStats.zero,
+                stats: stats,
                 progress: progress,
                 potionChargeCount: potionChargeCount,
                 potionCapacity: TaskController.potionCapacity,

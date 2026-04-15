@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/widgets/character_avatar.dart';
@@ -45,6 +46,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
   late final PageController _pageController;
   int _currentPageIndex = 0;
   int _bottleJiggleCount = 0;
+  final Map<int, double> _pageHeights = <int, double>{};
 
   @override
   void initState() {
@@ -82,6 +84,19 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
 
     setState(() {
       _bottleJiggleCount += 1;
+    });
+  }
+
+  void _updatePageHeight(int index, double height) {
+    final normalizedHeight = height.ceilToDouble();
+    final previousHeight = _pageHeights[index];
+    if (previousHeight != null &&
+        (previousHeight - normalizedHeight).abs() < 1) {
+      return;
+    }
+
+    setState(() {
+      _pageHeights[index] = normalizedHeight;
     });
   }
 
@@ -175,33 +190,48 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
                       stats: widget.stats,
                       celebrationCount: widget.celebrationCount,
                     );
-                    final heroHeight = _heroHeightForWidth(
+                    final fallbackHeroHeight = _heroHeightForWidth(
                       constraints.maxWidth,
+                    );
+                    final heroHeight = math.max(
+                      _pageHeights[_currentPageIndex] ?? fallbackHeroHeight,
+                      0.0,
                     );
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SizedBox(
-                          height: heroHeight,
-                          child: PageView(
-                            key: const ValueKey('hero-page-view'),
-                            controller: _pageController,
-                            onPageChanged: (index) {
-                              setState(() {
-                                _currentPageIndex = index;
-                              });
-                            },
-                            children: [
-                              _HeroPage(
-                                key: const ValueKey('hero-page-potion'),
-                                child: potionPane,
-                              ),
-                              _HeroPage(
-                                key: const ValueKey('hero-page-character'),
-                                child: companionPane,
-                              ),
-                            ],
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeInOutCubic,
+                          alignment: Alignment.topCenter,
+                          child: SizedBox(
+                            height: heroHeight,
+                            child: PageView(
+                              key: const ValueKey('hero-page-view'),
+                              controller: _pageController,
+                              onPageChanged: (index) {
+                                setState(() {
+                                  _currentPageIndex = index;
+                                });
+                              },
+                              children: [
+                                _HeroPage(
+                                  key: const ValueKey('hero-page-potion'),
+                                  onHeightChanged: (height) {
+                                    _updatePageHeight(0, height);
+                                  },
+                                  child: potionPane,
+                                ),
+                                _HeroPage(
+                                  key: const ValueKey('hero-page-character'),
+                                  onHeightChanged: (height) {
+                                    _updatePageHeight(1, height);
+                                  },
+                                  child: companionPane,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 18),
@@ -240,13 +270,80 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
 }
 
 class _HeroPage extends StatelessWidget {
-  const _HeroPage({super.key, required this.child});
+  const _HeroPage({
+    super.key,
+    required this.child,
+    required this.onHeightChanged,
+  });
 
   final Widget child;
+  final ValueChanged<double> onHeightChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Align(alignment: Alignment.topCenter, child: child);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return OverflowBox(
+          minWidth: constraints.maxWidth,
+          maxWidth: constraints.maxWidth,
+          minHeight: 0,
+          maxHeight: double.infinity,
+          alignment: Alignment.topCenter,
+          child: _MeasureSize(
+            onChange: (size) => onHeightChanged(size.height),
+            child: SizedBox(
+              width: constraints.maxWidth,
+              child: Align(alignment: Alignment.topCenter, child: child),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MeasureSize extends SingleChildRenderObjectWidget {
+  const _MeasureSize({required this.onChange, required super.child});
+
+  final ValueChanged<Size> onChange;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderMeasureSize(onChange);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderMeasureSize renderObject,
+  ) {
+    renderObject.onChange = onChange;
+  }
+}
+
+class _RenderMeasureSize extends RenderProxyBox {
+  _RenderMeasureSize(this._onChange);
+
+  ValueChanged<Size> _onChange;
+  Size? _previousSize;
+
+  set onChange(ValueChanged<Size> value) {
+    _onChange = value;
+  }
+
+  @override
+  void performLayout() {
+    super.performLayout();
+
+    final nextSize = size;
+    if (_previousSize == nextSize) {
+      return;
+    }
+    _previousSize = nextSize;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onChange(nextSize);
+    });
   }
 }
 
@@ -814,7 +911,7 @@ class _StatCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      constraints: const BoxConstraints(minWidth: 112),
+      constraints: const BoxConstraints(minWidth: 112, maxWidth: 156),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
@@ -822,7 +919,7 @@ class _StatCard extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.10)),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         children: [
           Container(
             width: 34,
@@ -834,28 +931,55 @@ class _StatCard extends StatelessWidget {
             child: Icon(icon, size: 18, color: color),
           ),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-              Text(
-                '$value',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
+                Text(
+                  _formatStatValue(value),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+String _formatStatValue(int value) {
+  if (value < 1000) {
+    return '$value';
+  }
+
+  const units = ['K', 'M', 'B'];
+  var compactValue = value.toDouble();
+
+  for (final unit in units) {
+    compactValue /= 1000;
+    if (compactValue < 1000) {
+      final roundedValue = compactValue >= 10
+          ? compactValue.toStringAsFixed(0)
+          : compactValue.toStringAsFixed(1);
+      return '${roundedValue.replaceFirst(RegExp(r'\.0$'), '')}$unit';
+    }
+  }
+
+  return value.toString();
 }
 
 class _CategoryChip extends StatelessWidget {

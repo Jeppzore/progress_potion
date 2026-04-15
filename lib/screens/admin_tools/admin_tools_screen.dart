@@ -68,16 +68,20 @@ class _AdminToolsScreenState extends State<AdminToolsScreen> {
   }
 
   Future<void> _grantStats() async {
-    final strength = _parsePositiveInt(_strengthController.text);
-    final vitality = _parsePositiveInt(_vitalityController.text);
-    final wisdom = _parsePositiveInt(_wisdomController.text);
-    final mindfulness = _parsePositiveInt(_mindfulnessController.text);
+    final strength = _parseOptionalNonNegativeInt(_strengthController.text);
+    final vitality = _parseOptionalNonNegativeInt(_vitalityController.text);
+    final wisdom = _parseOptionalNonNegativeInt(_wisdomController.text);
+    final mindfulness = _parseOptionalNonNegativeInt(
+      _mindfulnessController.text,
+    );
 
     if (strength == null ||
         vitality == null ||
         wisdom == null ||
         mindfulness == null) {
-      _showMessage('Fill every stat field with a positive whole number.');
+      _showMessage(
+        'Use whole numbers for stats. Leave a field blank for zero.',
+      );
       return;
     }
 
@@ -522,7 +526,7 @@ class _StatField extends StatelessWidget {
       controller: controller,
       enabled: enabled,
       keyboardType: TextInputType.number,
-      decoration: InputDecoration(labelText: '$label gain', hintText: '2'),
+      decoration: InputDecoration(labelText: '$label gain', hintText: '0'),
     );
   }
 }
@@ -530,6 +534,19 @@ class _StatField extends StatelessWidget {
 int? _parsePositiveInt(String rawValue) {
   final value = int.tryParse(rawValue.trim());
   if (value == null || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
+int? _parseOptionalNonNegativeInt(String rawValue) {
+  final trimmedValue = rawValue.trim();
+  if (trimmedValue.isEmpty) {
+    return 0;
+  }
+
+  final value = int.tryParse(trimmedValue);
+  if (value == null || value < 0) {
     return null;
   }
   return value;

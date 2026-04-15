@@ -61,10 +61,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Fill every stat field with a positive whole number.'),
+      find.text('Use whole numbers for stats. Leave a field blank for zero.'),
       findsOneWidget,
     );
     expect(homeScreen.taskController.stats.strength, 0);
+  });
+
+  testWidgets('admin stat grant accepts blank fields as zero', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, taskService: _ImmediateTaskService());
+
+    final homeScreen = tester.widget<HomeScreen>(
+      find.byType(HomeScreen, skipOffstage: false),
+    );
+
+    await tester.longPress(find.byKey(const ValueKey('admin-tools-entry')));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('admin-strength-input')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('admin-strength-input')),
+      '7',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('admin-grant-stats-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('admin-grant-stats-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Stats updated:'), findsOneWidget);
+    expect(homeScreen.taskController.stats.strength, 7);
+    expect(homeScreen.taskController.stats.vitality, 0);
+    expect(homeScreen.taskController.stats.wisdom, 0);
+    expect(homeScreen.taskController.stats.mindfulness, 0);
   });
 
   testWidgets('admin tools wait for the initial load before opening', (
