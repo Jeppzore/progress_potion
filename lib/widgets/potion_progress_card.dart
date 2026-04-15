@@ -502,7 +502,7 @@ class _PotionPane extends StatelessWidget {
   }
 }
 
-class _CompanionPane extends StatelessWidget {
+class _CompanionPane extends StatefulWidget {
   const _CompanionPane({
     required this.xp,
     required this.stats,
@@ -514,18 +514,48 @@ class _CompanionPane extends StatelessWidget {
   final int celebrationCount;
 
   @override
+  State<_CompanionPane> createState() => _CompanionPaneState();
+}
+
+class _CompanionPaneState extends State<_CompanionPane> {
+  int _characterInteractionCount = 0;
+
+  void _handleCharacterTap() {
+    setState(() {
+      _characterInteractionCount += 1;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final stageHeadline = _companionHeadline(widget.stats.vitality);
+    final stageBody = _companionBody(widget.stats);
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.5),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.78),
+            const Color(0xFFFFF6EA),
+            theme.colorScheme.primaryContainer.withValues(alpha: 0.18),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.08),
+          color: theme.colorScheme.primary.withValues(alpha: 0.10),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -540,50 +570,230 @@ class _CompanionPane extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Your companion grows each time a full potion is claimed.',
-            style: theme.textTheme.bodyMedium,
+            'Each claimed potion quietly sharpens your companion posture, mood, and presence.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 14),
-          Center(
-            child: CharacterAvatar(
-              stats: stats,
-              celebrationCount: celebrationCount,
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFFCF6), Color(0xFFF2E6D5)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.09),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.10,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        stageHeadline,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'Tap for a wave',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFFF9F0), Color(0xFFEAD8BE)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFE3C59A).withValues(alpha: 0.32),
+                        blurRadius: 16,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned(
+                        top: 6,
+                        child: Container(
+                          width: 190,
+                          height: 190,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: [
+                                theme.colorScheme.secondary.withValues(
+                                  alpha: 0.20,
+                                ),
+                                theme.colorScheme.primary.withValues(
+                                  alpha: 0.08,
+                                ),
+                                Colors.transparent,
+                              ],
+                              stops: const [0, 0.55, 1],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 18,
+                        child: Container(
+                          width: 176,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFB88D67), Color(0xFF8D6649)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 12,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Center(
+                        child: CharacterAvatar(
+                          size: const Size(190, 230),
+                          stats: widget.stats,
+                          celebrationCount: widget.celebrationCount,
+                          interactionCount: _characterInteractionCount,
+                          onTap: _handleCharacterTap,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  stageBody,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _StatCard(
-                label: 'XP',
-                value: xp,
-                icon: Icons.stars_rounded,
-                color: theme.colorScheme.primary,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.54),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.06),
               ),
-              for (final entry in stats.entries)
+            ),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
                 _StatCard(
-                  label: entry.key.displayName,
-                  value: entry.value,
-                  icon: switch (entry.key) {
-                    CharacterStat.strength => Icons.fitness_center_rounded,
-                    CharacterStat.vitality => Icons.favorite_rounded,
-                    CharacterStat.wisdom => Icons.auto_stories_rounded,
-                    CharacterStat.mindfulness => Icons.spa_rounded,
-                  },
-                  color: switch (entry.key) {
-                    CharacterStat.strength => const Color(0xFFCD6A43),
-                    CharacterStat.vitality => const Color(0xFFBD5757),
-                    CharacterStat.wisdom => const Color(0xFF3966C4),
-                    CharacterStat.mindfulness => const Color(0xFF4B8B70),
-                  },
+                  label: 'XP',
+                  value: widget.xp,
+                  icon: Icons.stars_rounded,
+                  color: theme.colorScheme.primary,
                 ),
-            ],
+                for (final entry in widget.stats.entries)
+                  _StatCard(
+                    label: entry.key.displayName,
+                    value: entry.value,
+                    icon: switch (entry.key) {
+                      CharacterStat.strength => Icons.fitness_center_rounded,
+                      CharacterStat.vitality => Icons.favorite_rounded,
+                      CharacterStat.wisdom => Icons.auto_stories_rounded,
+                      CharacterStat.mindfulness => Icons.spa_rounded,
+                    },
+                    color: switch (entry.key) {
+                      CharacterStat.strength => const Color(0xFFCD6A43),
+                      CharacterStat.vitality => const Color(0xFFBD5757),
+                      CharacterStat.wisdom => const Color(0xFF3966C4),
+                      CharacterStat.mindfulness => const Color(0xFF4B8B70),
+                    },
+                  ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+String _companionHeadline(int vitality) {
+  if (vitality >= 100) {
+    return 'Standing tall';
+  }
+  if (vitality >= 60) {
+    return 'Almost upright';
+  }
+  if (vitality >= 25) {
+    return 'Finding balance';
+  }
+  return 'Starting seated';
+}
+
+String _companionBody(CharacterStats stats) {
+  final totalGrowth = stats.entries.fold<int>(
+    0,
+    (sum, entry) => sum + entry.value,
+  );
+  final presence = totalGrowth == 0
+      ? 'Your companion is just beginning the climb.'
+      : 'Every full potion leaves a visible trace in their stance and expression.';
+
+  if (stats.vitality >= 100) {
+    return '$presence Vitality has reached the standing milestone, so new gains now read as polish rather than a bigger pose change.';
+  }
+  if (stats.vitality >= 60) {
+    return '$presence The posture is nearly upright now, with longer lines and a calmer gaze.';
+  }
+  if (stats.vitality >= 25) {
+    return '$presence The shoulders are lifting and the seated slump is starting to fade.';
+  }
+  return '$presence Early gains stay subtle so the bigger posture payoff still feels earned.';
 }
 
 class _StatCard extends StatelessWidget {
@@ -607,8 +817,9 @@ class _StatCard extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 112),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.10)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -617,7 +828,7 @@ class _StatCard extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.14),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, size: 18, color: color),

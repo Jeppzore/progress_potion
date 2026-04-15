@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:progress_potion/app/progress_potion_app.dart';
@@ -203,7 +205,7 @@ void main() {
   );
 
   testWidgets(
-    'character avatar reflects stat growth with broader body and beard',
+    'character avatar keeps beard below the mouth and brows below the hairline',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         const MediaQuery(
@@ -239,7 +241,7 @@ void main() {
                 child: CharacterAvatar(
                   stats: CharacterStats(
                     strength: 6,
-                    vitality: 6,
+                    vitality: 40,
                     wisdom: 6,
                     mindfulness: 6,
                   ),
@@ -258,14 +260,185 @@ void main() {
       final grownMouthSize = tester.getSize(
         find.byKey(const ValueKey('avatar-mouth')),
       );
+      final mouthRect = tester.getRect(
+        find.byKey(const ValueKey('avatar-mouth')),
+      );
+      final beardRect = tester.getRect(
+        find.byKey(const ValueKey('avatar-beard')),
+      );
+      final hairRect = tester.getRect(
+        find.byKey(const ValueKey('avatar-hairline')),
+      );
+      final leftBrowRect = tester.getRect(
+        find.byKey(const ValueKey('avatar-left-brow')),
+      );
+      final rightBrowRect = tester.getRect(
+        find.byKey(const ValueKey('avatar-right-brow')),
+      );
 
       expect(find.byKey(const ValueKey('avatar-beard')), findsOneWidget);
       expect(grownTorsoSize.width, greaterThan(baseTorsoSize.width));
       expect(grownTorsoSize.height, greaterThan(baseTorsoSize.height));
       expect(grownMouthSize.width, greaterThan(baseMouthSize.width));
       expect(grownMouthSize.height, greaterThan(baseMouthSize.height));
+      expect(beardRect.top, greaterThanOrEqualTo(mouthRect.bottom));
+      expect(leftBrowRect.top, greaterThan(hairRect.bottom));
+      expect(rightBrowRect.top, greaterThan(hairRect.bottom));
     },
   );
+
+  testWidgets(
+    'vitality posture rises to standing at 100 and plateaus after that',
+    (WidgetTester tester) async {
+      Future<Rect> torsoRectForVitality(int vitality) async {
+        await tester.pumpWidget(
+          MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: CharacterAvatar(
+                    stats: CharacterStats(
+                      strength: 0,
+                      vitality: vitality,
+                      wisdom: 0,
+                      mindfulness: 0,
+                    ),
+                    celebrationCount: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        return tester.getRect(find.byKey(const ValueKey('avatar-torso')));
+      }
+
+      final seatedTorso = await torsoRectForVitality(0);
+      expect(find.byKey(const ValueKey('avatar-seat')), findsOneWidget);
+
+      final standingTorso = await torsoRectForVitality(100);
+      expect(find.byKey(const ValueKey('avatar-seat')), findsNothing);
+
+      final plateauTorso = await torsoRectForVitality(1000);
+
+      expect(standingTorso.top, lessThan(seatedTorso.top));
+      expect((standingTorso.top - plateauTorso.top).abs(), lessThan(0.01));
+      expect(
+        (standingTorso.height - plateauTorso.height).abs(),
+        lessThan(0.01),
+      );
+    },
+  );
+
+  testWidgets('character tap triggers sparkle feedback', (
+    WidgetTester tester,
+  ) async {
+    var tapCount = 0;
+
+    await tester.pumpWidget(
+      _CharacterAvatarHarness(
+        onAvatarTap: () {
+          tapCount += 1;
+        },
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byKey(const ValueKey('avatar-sparkle-0')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(tapCount, 1);
+    expect(find.byKey(const ValueKey('avatar-sparkle-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('avatar-sparkle-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('avatar-sparkle-2')), findsOneWidget);
+  });
+
+  testWidgets(
+    'reduced motion keeps character tappable without nonessential animation',
+    (WidgetTester tester) async {
+      var tapCount = 0;
+
+      await tester.pumpWidget(
+        _CharacterAvatarHarness(
+          disableAnimations: true,
+          onAvatarTap: () {
+            tapCount += 1;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(tapCount, 1);
+      expect(
+        find.byKey(const ValueKey('avatar-reduced-motion-pulse')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('avatar-sparkle-0')), findsNothing);
+      expect(find.byKey(const ValueKey('avatar-sparkle-1')), findsNothing);
+      expect(find.byKey(const ValueKey('avatar-sparkle-2')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 220));
+    },
+  );
+
+  testWidgets('character avatar exposes button semantics when tappable', (
+    WidgetTester tester,
+  ) async {
+    final semanticsHandle = tester.ensureSemantics();
+
+    await tester.pumpWidget(const _CharacterAvatarHarness(disableAnimations: true));
+    await tester.pumpAndSettle();
+
+    final semantics = tester.getSemantics(
+      find.byKey(const ValueKey('avatar-tap-target')),
+    );
+
+    final data = semantics.getSemanticsData();
+
+    expect(data.label, 'Potionkeeper companion');
+    expect(data.hint, 'Tap to encourage your companion');
+    expect(data.hasAction(ui.SemanticsAction.tap), isTrue);
+    expect(data.flagsCollection.isButton, isTrue);
+    semanticsHandle.dispose();
+  });
+
+  testWidgets('character page wires avatar tap feedback through the hero view', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester);
+
+    await tester.ensureVisible(find.text('Character'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Character'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('avatar-tap-target')),
+      -120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tap for a wave'), findsOneWidget);
+    expect(find.byKey(const ValueKey('avatar-tap-target')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+
+    expect(
+      find.byKey(const ValueKey('avatar-reduced-motion-pulse')),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(milliseconds: 220));
+  });
 
   testWidgets('adds a task from the add task screen', (
     WidgetTester tester,
@@ -552,4 +725,53 @@ Color? _toggleColor(WidgetTester tester, Finder finder) {
 
 int _channelValue(Color color, int shift) {
   return (color.toARGB32() >> shift) & 0xFF;
+}
+
+class _CharacterAvatarHarness extends StatefulWidget {
+  const _CharacterAvatarHarness({
+    this.disableAnimations = false,
+    this.onAvatarTap,
+  });
+
+  final bool disableAnimations;
+  final VoidCallback? onAvatarTap;
+
+  @override
+  State<_CharacterAvatarHarness> createState() =>
+      _CharacterAvatarHarnessState();
+}
+
+class _CharacterAvatarHarnessState extends State<_CharacterAvatarHarness> {
+  int _interactionCount = 0;
+
+  void _handleTap() {
+    widget.onAvatarTap?.call();
+    setState(() {
+      _interactionCount += 1;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MediaQuery(
+      data: MediaQueryData(disableAnimations: widget.disableAnimations),
+      child: MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: CharacterAvatar(
+              stats: const CharacterStats(
+                strength: 2,
+                vitality: 45,
+                wisdom: 4,
+                mindfulness: 5,
+              ),
+              celebrationCount: 0,
+              interactionCount: _interactionCount,
+              onTap: _handleTap,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
