@@ -7,6 +7,8 @@ import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/task_service.dart';
 
+enum FavoriteSort { mostUsed, libraryOrder }
+
 class TaskController extends ChangeNotifier {
   TaskController({required TaskService taskService})
     : _taskService = taskService;
@@ -91,6 +93,27 @@ class TaskController extends ChangeNotifier {
     return items;
   }
 
+  List<TaskCatalogItem> favoriteCatalogItems({
+    FavoriteSort sort = FavoriteSort.mostUsed,
+  }) {
+    final items = _catalogItems.where((item) => item.isFavorite).toList();
+    if (sort == FavoriteSort.mostUsed) {
+      items.sort(_compareFavoritesByMostUsed);
+    } else {
+      items.sort(_compareCatalogItems);
+    }
+    return items;
+  }
+
+  bool isTaskFavorite(String taskId) {
+    for (final task in _tasks) {
+      if (task.id == taskId) {
+        return _findCatalogItemForTask(task)?.isFavorite ?? false;
+      }
+    }
+    return false;
+  }
+
   Future<void> addTask({
     required String title,
     required TaskCategory category,
@@ -165,6 +188,38 @@ class TaskController extends ChangeNotifier {
     final nextCatalogItems = [
       for (final item in _catalogItems)
         if (item.id == catalogItemId) updatedItem else item,
+    ];
+
+    await _saveAndApplyState(_buildState(catalogItems: nextCatalogItems));
+  }
+
+  Future<void> markTaskAsFavorite(String taskId) async {
+    final currentIndex = _tasks.indexWhere((task) => task.id == taskId);
+    if (currentIndex == -1 || _tasks[currentIndex].isCompleted) {
+      return;
+    }
+
+    final task = _tasks[currentIndex];
+    final existing = _findCatalogItemForTask(task);
+    if (existing == null) {
+      final catalogItem = _buildCatalogItem(
+        title: task.title,
+        category: task.category,
+        description: task.description,
+      ).copyWith(isFavorite: true);
+      await _saveAndApplyState(
+        _buildState(catalogItems: [catalogItem, ..._catalogItems]),
+      );
+      return;
+    }
+
+    if (existing.isFavorite) {
+      return;
+    }
+
+    final nextCatalogItems = [
+      for (final item in _catalogItems)
+        if (item.id == existing.id) item.copyWith(isFavorite: true) else item,
     ];
 
     await _saveAndApplyState(_buildState(catalogItems: nextCatalogItems));
@@ -247,10 +302,12 @@ class TaskController extends ChangeNotifier {
         ..._potionChargeCategories,
         updatedTask.category,
       ];
+      final nextCatalogItems = _incrementCompletedCount(updatedTask);
 
       await _saveAndApplyState(
         _buildState(
           tasks: nextTasks,
+          catalogItems: nextCatalogItems,
           potionChargeCategories: nextPotionChargeCategories,
         ),
       );
@@ -413,6 +470,33 @@ class TaskController extends ChangeNotifier {
     }
 
     return a.id.compareTo(b.id);
+  }
+
+  int _compareFavoritesByMostUsed(TaskCatalogItem a, TaskCatalogItem b) {
+    if (a.completedCount != b.completedCount) {
+      return b.completedCount.compareTo(a.completedCount);
+    }
+
+    return _compareCatalogItems(a, b);
+  }
+
+  List<TaskCatalogItem> _incrementCompletedCount(Task task) {
+    final matchingItem = _findCatalogItemForTask(task);
+    if (matchingItem == null) {
+      return _catalogItems;
+    }
+
+    return [
+      for (final item in _catalogItems)
+        if (item.id == matchingItem.id)
+          item.copyWith(completedCount: item.completedCount + 1)
+        else
+          item,
+    ];
+  }
+
+  TaskCatalogItem? _findCatalogItemForTask(Task task) {
+    return _findCatalogItem(task.title, task.category, task.description);
   }
 
   TaskCatalogItem? _findCatalogItem(

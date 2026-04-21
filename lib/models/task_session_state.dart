@@ -33,6 +33,7 @@ const List<TaskCatalogItem> defaultSeedCatalogItems = [
     description: 'Choose the one win that matters most before opening chat.',
     isDefault: true,
     sortOrder: 0,
+    completedCount: 1,
   ),
   TaskCatalogItem(
     id: 'catalog-refill-water-flask',
@@ -73,7 +74,7 @@ class TaskSessionState {
          potionChargeCategories,
        );
 
-  static const int schemaVersion = 3;
+  static const int schemaVersion = 4;
 
   final List<Task> tasks;
   final List<TaskCatalogItem> catalogItems;
@@ -121,6 +122,7 @@ class TaskSessionState {
 
     if (schemaVersionValue != 1 &&
         schemaVersionValue != 2 &&
+        schemaVersionValue != 3 &&
         schemaVersionValue != schemaVersion) {
       throw FormatException(
         'Unsupported task session schema version: $schemaVersionValue',

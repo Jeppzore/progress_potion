@@ -31,6 +31,7 @@ void main() {
       isFavorite: true,
       isDefault: false,
       sortOrder: 7,
+      completedCount: 4,
     );
 
     final decoded = TaskCatalogItem.fromJson(catalogItem.toJson());
@@ -42,6 +43,7 @@ void main() {
     expect(decoded.isFavorite, isTrue);
     expect(decoded.isDefault, isFalse);
     expect(decoded.sortOrder, 7);
+    expect(decoded.completedCount, 4);
   });
 
   test('TaskSessionState round trips through JSON', () {
@@ -61,6 +63,7 @@ void main() {
           title: 'Work task',
           category: TaskCategory.work,
           sortOrder: 0,
+          completedCount: 2,
         ),
         TaskCatalogItem(
           id: 'catalog-home-task',
@@ -86,6 +89,7 @@ void main() {
       'catalog-work-task',
       'catalog-home-task',
     ]);
+    expect(decoded.catalogItems.first.completedCount, 2);
     expect(decoded.totalXp, 85);
     expect(decoded.stats.strength, 2);
     expect(decoded.stats.mindfulness, 8);
@@ -130,8 +134,41 @@ void main() {
         decoded.catalogItems.where((item) => item.isDefault),
         hasLength(3),
       );
+      expect(
+        decoded.catalogItems.every((item) => item.completedCount >= 0),
+        isTrue,
+      );
     },
   );
+
+  test('TaskSessionState migrates schema v3 catalog counts to zero', () {
+    final decoded = TaskSessionState.fromJson({
+      'schemaVersion': 3,
+      'tasks': const [],
+      'catalogItems': [
+        {
+          'id': 'catalog-v3-task',
+          'title': 'V3 task',
+          'description': '',
+          'category': 'study',
+          'isFavorite': true,
+          'isDefault': false,
+          'sortOrder': 0,
+        },
+      ],
+      'totalXp': 0,
+      'stats': const {
+        'strength': 0,
+        'vitality': 0,
+        'wisdom': 0,
+        'mindfulness': 0,
+      },
+      'potionChargeCategories': const <String>[],
+    });
+
+    expect(decoded.catalogItems.single.completedCount, 0);
+    expect(decoded.catalogItems.single.isFavorite, isTrue);
+  });
 
   test('TaskSessionState migrates schema v1 sessions with zeroed stats', () {
     final decoded = TaskSessionState.fromJson({

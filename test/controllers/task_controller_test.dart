@@ -116,6 +116,59 @@ void main() {
   });
 
   test(
+    'favoriteCatalogItems sorts favorites by most used by default',
+    () async {
+      final seededController = TaskController(
+        taskService: InMemoryTaskService(
+          initialState: TaskSessionState(
+            tasks: const [],
+            catalogItems: const [
+              TaskCatalogItem(
+                id: 'catalog-low',
+                title: 'Low use',
+                category: TaskCategory.work,
+                isFavorite: true,
+                sortOrder: 4,
+                completedCount: 2,
+              ),
+              TaskCatalogItem(
+                id: 'catalog-high',
+                title: 'High use',
+                category: TaskCategory.work,
+                isFavorite: true,
+                sortOrder: 1,
+                completedCount: 5,
+              ),
+              TaskCatalogItem(
+                id: 'catalog-hidden',
+                title: 'Hidden',
+                category: TaskCategory.work,
+                sortOrder: 8,
+                completedCount: 9,
+              ),
+            ],
+            totalXp: 0,
+            stats: CharacterStats.zero,
+            potionChargeCategories: const [],
+          ),
+        ),
+      );
+      await seededController.loadTasks();
+
+      expect(seededController.favoriteCatalogItems().map((item) => item.id), [
+        'catalog-high',
+        'catalog-low',
+      ]);
+      expect(
+        seededController
+            .favoriteCatalogItems(sort: FavoriteSort.libraryOrder)
+            .map((item) => item.id),
+        ['catalog-low', 'catalog-high'],
+      );
+    },
+  );
+
+  test(
     'activateCatalogItem snapshots catalog data into the active list',
     () async {
       await controller.loadTasks();
@@ -251,6 +304,18 @@ void main() {
     expect(controller.canDrinkPotion, isTrue);
     expect(controller.totalXp, 0);
     expect(controller.stats.mindfulness, 0);
+    expect(
+      controller.catalogItems
+          .singleWhere((item) => item.id == 'catalog-refill-water-flask')
+          .completedCount,
+      1,
+    );
+    expect(
+      controller.catalogItems
+          .singleWhere((item) => item.id == 'catalog-ship-one-tiny-step')
+          .completedCount,
+      1,
+    );
   });
 
   test(
@@ -270,6 +335,62 @@ void main() {
       ]);
       expect(controller.totalXp, 0);
       expect(controller.stats.strength, 0);
+      expect(
+        controller.catalogItems
+            .singleWhere((item) => item.id == 'catalog-refill-water-flask')
+            .completedCount,
+        1,
+      );
+    },
+  );
+
+  test('markTaskAsFavorite reuses an existing catalog item', () async {
+    await controller.loadTasks();
+
+    await controller.markTaskAsFavorite('refill-water-flask');
+
+    final item = controller.catalogItems.singleWhere(
+      (item) => item.id == 'catalog-refill-water-flask',
+    );
+    expect(item.isFavorite, isTrue);
+    expect(controller.isTaskFavorite('refill-water-flask'), isTrue);
+    expect(
+      controller.catalogItems.where(
+        (item) => item.title == 'Refill water flask',
+      ),
+      hasLength(1),
+    );
+  });
+
+  test(
+    'markTaskAsFavorite creates a favorite for an active-only task',
+    () async {
+      final seededController = TaskController(
+        taskService: InMemoryTaskService(
+          initialState: TaskSessionState(
+            tasks: const [
+              Task(
+                id: 'active-only',
+                title: 'Active only',
+                category: TaskCategory.home,
+                description: 'Not saved yet.',
+              ),
+            ],
+            catalogItems: const [],
+            totalXp: 0,
+            stats: CharacterStats.zero,
+            potionChargeCategories: const [],
+          ),
+        ),
+      );
+      await seededController.loadTasks();
+
+      await seededController.markTaskAsFavorite('active-only');
+
+      expect(seededController.catalogItems, hasLength(1));
+      expect(seededController.catalogItems.single.title, 'Active only');
+      expect(seededController.catalogItems.single.isFavorite, isTrue);
+      expect(seededController.isTaskFavorite('active-only'), isTrue);
     },
   );
 

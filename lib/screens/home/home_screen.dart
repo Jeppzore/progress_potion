@@ -28,6 +28,18 @@ class _HomeScreenState extends State<HomeScreen> {
     await widget.taskController.removeActiveTask(id);
   }
 
+  Future<void> _markTaskAsFavorite(Task task) async {
+    widget.feedbackSoundPlayer.play(FeedbackSound.buttonTap);
+    await widget.taskController.markTaskAsFavorite(task.id);
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Saved to favorites.')));
+  }
+
   Future<void> _completeTask(Task task) async {
     final wasActive = widget.taskController.activeTasks.any(
       (activeTask) => activeTask.id == task.id,
@@ -170,8 +182,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     for (final task in activeTasks) ...[
                       TaskTile(
                         task: task,
+                        isFavorite: widget.taskController.isTaskFavorite(
+                          task.id,
+                        ),
                         onComplete: () => _completeTask(task),
                         onRemove: () => _removeActiveTask(task.id),
+                        onFavorite: () => _markTaskAsFavorite(task),
                       ),
                       const SizedBox(height: 10),
                     ],
@@ -194,9 +210,9 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.w900,
-      ),
+      style: Theme.of(
+        context,
+      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
     );
   }
 }

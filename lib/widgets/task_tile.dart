@@ -5,13 +5,17 @@ class TaskTile extends StatelessWidget {
   const TaskTile({
     super.key,
     required this.task,
+    this.isFavorite = false,
     this.onComplete,
     this.onRemove,
+    this.onFavorite,
   });
 
   final Task task;
+  final bool isFavorite;
   final VoidCallback? onComplete;
   final VoidCallback? onRemove;
+  final VoidCallback? onFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -157,6 +161,32 @@ class TaskTile extends StatelessWidget {
                                       Icons.remove_circle_outline_rounded,
                                     ),
                                     label: const Text('Remove'),
+                                  ),
+                                if (isFavorite)
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.star_rounded,
+                                        size: 20,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Favorited',
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                      ),
+                                    ],
+                                  )
+                                else if (onFavorite != null)
+                                  TextButton.icon(
+                                    onPressed: onFavorite,
+                                    icon: const Icon(Icons.star_border_rounded),
+                                    label: const Text('+ Favorite'),
                                   ),
                                 _CompleteTaskButton(
                                   onPressed: onComplete,

@@ -58,6 +58,7 @@ void main() {
           title: 'Completed task',
           category: TaskCategory.study,
           sortOrder: 1,
+          completedCount: 3,
         ),
       ],
       totalXp: 0,
@@ -83,6 +84,7 @@ void main() {
       'catalog-active-task',
       'catalog-completed-task',
     ]);
+    expect(loadedState.catalogItems.last.completedCount, 3);
     expect(loadedState.tasks.last.isCompleted, isTrue);
     expect(loadedState.stats.vitality, 1);
     expect(loadedState.stats.wisdom, 2);
@@ -173,9 +175,43 @@ void main() {
     expect(loadedState.potionChargeCategories, [TaskCategory.hobby]);
   });
 
-  test('loadState migrates a legacy v2 key into the v3 key', () async {
+  test('loadState migrates a legacy v3 key into the v4 key', () async {
     SharedPreferences.setMockInitialValues({
       SharedPreferencesTaskService.legacyStorageKey: jsonEncode({
+        'schemaVersion': 3,
+        'tasks': const [],
+        'catalogItems': const [],
+        'totalXp': 10,
+        'stats': const {
+          'strength': 0,
+          'vitality': 0,
+          'wisdom': 0,
+          'mindfulness': 0,
+        },
+        'potionChargeCategories': ['work'],
+      }),
+    });
+    final preferences = await SharedPreferences.getInstance();
+    final service = SharedPreferencesTaskService(preferences: preferences);
+
+    final loadedState = await service.loadState();
+
+    expect(loadedState.totalXp, 10);
+    expect(loadedState.stats.wisdom, 0);
+    expect(loadedState.catalogItems, isEmpty);
+    expect(
+      preferences.getString(SharedPreferencesTaskService.storageKey),
+      isNotNull,
+    );
+    expect(
+      preferences.containsKey(SharedPreferencesTaskService.legacyStorageKey),
+      isFalse,
+    );
+  });
+
+  test('loadState migrates a legacy v2 key into the v4 key', () async {
+    SharedPreferences.setMockInitialValues({
+      SharedPreferencesTaskService.olderLegacyStorageKey: jsonEncode({
         'schemaVersion': 2,
         'tasks': const [],
         'totalXp': 10,
@@ -201,14 +237,16 @@ void main() {
       isNotNull,
     );
     expect(
-      preferences.containsKey(SharedPreferencesTaskService.legacyStorageKey),
+      preferences.containsKey(
+        SharedPreferencesTaskService.olderLegacyStorageKey,
+      ),
       isFalse,
     );
   });
 
-  test('loadState migrates a legacy v1 key into the v3 key', () async {
+  test('loadState migrates a legacy v1 key into the v4 key', () async {
     SharedPreferences.setMockInitialValues({
-      SharedPreferencesTaskService.olderLegacyStorageKey: jsonEncode({
+      SharedPreferencesTaskService.oldestLegacyStorageKey: jsonEncode({
         'schemaVersion': 1,
         'tasks': const [],
         'totalXp': 10,
@@ -229,7 +267,7 @@ void main() {
     );
     expect(
       preferences.containsKey(
-        SharedPreferencesTaskService.olderLegacyStorageKey,
+        SharedPreferencesTaskService.oldestLegacyStorageKey,
       ),
       isFalse,
     );

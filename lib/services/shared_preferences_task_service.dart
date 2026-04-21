@@ -9,9 +9,10 @@ class SharedPreferencesTaskService implements TaskService {
   SharedPreferencesTaskService({required SharedPreferences preferences})
     : _preferences = preferences;
 
-  static const String storageKey = 'progress_potion.session.v3';
-  static const String legacyStorageKey = 'progress_potion.session.v2';
-  static const String olderLegacyStorageKey = 'progress_potion.session.v1';
+  static const String storageKey = 'progress_potion.session.v4';
+  static const String legacyStorageKey = 'progress_potion.session.v3';
+  static const String olderLegacyStorageKey = 'progress_potion.session.v2';
+  static const String oldestLegacyStorageKey = 'progress_potion.session.v1';
 
   final SharedPreferences _preferences;
 
@@ -20,7 +21,9 @@ class SharedPreferencesTaskService implements TaskService {
     final savedState = _preferences.getString(storageKey);
     final legacyState = _preferences.getString(legacyStorageKey);
     final olderLegacyState = _preferences.getString(olderLegacyStorageKey);
-    final rawState = savedState ?? legacyState ?? olderLegacyState;
+    final oldestLegacyState = _preferences.getString(oldestLegacyStorageKey);
+    final rawState =
+        savedState ?? legacyState ?? olderLegacyState ?? oldestLegacyState;
     if (rawState == null) {
       final seedState = createDefaultTaskSessionState();
       await saveState(seedState);
@@ -56,6 +59,9 @@ class SharedPreferencesTaskService implements TaskService {
     }
     if (_preferences.containsKey(olderLegacyStorageKey)) {
       await _preferences.remove(olderLegacyStorageKey);
+    }
+    if (_preferences.containsKey(oldestLegacyStorageKey)) {
+      await _preferences.remove(oldestLegacyStorageKey);
     }
   }
 }

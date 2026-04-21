@@ -6,6 +6,7 @@ import 'package:progress_potion/controllers/task_controller.dart';
 import 'package:progress_potion/screens/admin_tools/admin_tools_screen.dart';
 import 'package:progress_potion/screens/add_task/add_task_screen.dart';
 import 'package:progress_potion/screens/completed_tasks/completed_tasks_screen.dart';
+import 'package:progress_potion/screens/favorites/favorites_screen.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
 import 'package:progress_potion/services/feedback_sound_service.dart';
 import 'package:progress_potion/services/task_service.dart';
@@ -36,8 +37,7 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     _taskController = TaskController(taskService: widget.taskService);
     _ownsFeedbackSoundPlayer = widget.feedbackSoundPlayer == null;
-    _feedbackSoundPlayer =
-        widget.feedbackSoundPlayer ?? FeedbackSoundService();
+    _feedbackSoundPlayer = widget.feedbackSoundPlayer ?? FeedbackSoundService();
     unawaited(_feedbackSoundPlayer.preload());
     _initialLoad = _taskController.loadTasks();
   }
@@ -128,6 +128,10 @@ class _AppShellState extends State<AppShell> {
             taskController: _taskController,
             feedbackSoundPlayer: _feedbackSoundPlayer,
           ),
+          FavoritesScreen(
+            taskController: _taskController,
+            feedbackSoundPlayer: _feedbackSoundPlayer,
+          ),
           CompletedTasksScreen(taskController: _taskController),
         ],
       ),
@@ -146,6 +150,11 @@ class _AppShellState extends State<AppShell> {
             icon: Icon(Icons.local_drink_outlined),
             selectedIcon: Icon(Icons.local_drink),
             label: 'Active',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.star_border_rounded),
+            selectedIcon: Icon(Icons.star_rounded),
+            label: 'Favorites',
           ),
           NavigationDestination(
             icon: Icon(Icons.task_alt_outlined),

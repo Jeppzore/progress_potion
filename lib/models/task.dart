@@ -35,6 +35,7 @@ class TaskCatalogItem {
     this.isFavorite = false,
     this.isDefault = false,
     this.sortOrder = 0,
+    this.completedCount = 0,
   });
 
   final String id;
@@ -44,6 +45,7 @@ class TaskCatalogItem {
   final bool isFavorite;
   final bool isDefault;
   final int sortOrder;
+  final int completedCount;
 
   TaskCatalogItem copyWith({
     String? id,
@@ -53,6 +55,7 @@ class TaskCatalogItem {
     bool? isFavorite,
     bool? isDefault,
     int? sortOrder,
+    int? completedCount,
   }) {
     return TaskCatalogItem(
       id: id ?? this.id,
@@ -62,6 +65,7 @@ class TaskCatalogItem {
       isFavorite: isFavorite ?? this.isFavorite,
       isDefault: isDefault ?? this.isDefault,
       sortOrder: sortOrder ?? this.sortOrder,
+      completedCount: completedCount ?? this.completedCount,
     );
   }
 
@@ -84,6 +88,7 @@ class TaskCatalogItem {
       'isFavorite': isFavorite,
       'isDefault': isDefault,
       'sortOrder': sortOrder,
+      'completedCount': completedCount,
     };
   }
 
@@ -94,6 +99,7 @@ class TaskCatalogItem {
     final isFavorite = json['isFavorite'];
     final isDefault = json['isDefault'];
     final sortOrder = json['sortOrder'] ?? json['createdAt'] ?? 0;
+    final completedCount = json['completedCount'] ?? 0;
 
     if (id is! String || id.isEmpty) {
       throw const FormatException(
@@ -125,6 +131,12 @@ class TaskCatalogItem {
       );
     }
 
+    if (completedCount is! int || completedCount < 0) {
+      throw const FormatException(
+        'Catalog item completed count must be a non-negative int.',
+      );
+    }
+
     return TaskCatalogItem(
       id: id,
       title: title,
@@ -133,6 +145,7 @@ class TaskCatalogItem {
       isFavorite: isFavorite,
       isDefault: isDefault,
       sortOrder: sortOrder,
+      completedCount: completedCount,
     );
   }
 
@@ -142,6 +155,7 @@ class TaskCatalogItem {
     bool isFavorite = false,
     bool isDefault = false,
     int sortOrder = 0,
+    int completedCount = 0,
   }) {
     return TaskCatalogItem(
       id: id ?? 'catalog-${task.id}',
@@ -151,6 +165,7 @@ class TaskCatalogItem {
       isFavorite: isFavorite,
       isDefault: isDefault,
       sortOrder: sortOrder,
+      completedCount: completedCount,
     );
   }
 }

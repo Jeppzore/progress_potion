@@ -10,6 +10,7 @@ import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/screens/add_task/add_task_screen.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
 import 'package:progress_potion/services/feedback_sound_service.dart';
+import 'package:progress_potion/services/in_memory_task_service.dart';
 import 'package:progress_potion/services/task_service.dart';
 import 'package:progress_potion/widgets/character_avatar.dart';
 import 'package:progress_potion/widgets/potion_progress_card.dart';
@@ -29,6 +30,7 @@ void main() {
     expect(find.text('Drink Potion'), findsNothing);
     expect(find.widgetWithText(FilledButton, 'Add Task'), findsOneWidget);
     expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Favorites'), findsOneWidget);
     expect(find.text('Completed'), findsOneWidget);
 
     await _scrollToText(tester, 'Active Tasks');
@@ -72,6 +74,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Brew morning focus'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-library-action')), findsNothing);
+
+    await tester.tap(find.text('Favorites'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No favorites yet'), findsOneWidget);
     expect(find.byKey(const ValueKey('task-library-action')), findsNothing);
 
     await tester.tap(find.text('Active'));
@@ -708,6 +716,81 @@ void main() {
       await _scrollToText(tester, 'Active Tasks');
 
       expect(find.text('Plan weekly review'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'favorites tab renders favorite tasks with counts and sort controls',
+    (WidgetTester tester) async {
+      final service = InMemoryTaskService(
+        initialState: TaskSessionState(
+          tasks: const [],
+          catalogItems: const [
+            TaskCatalogItem(
+              id: 'catalog-low-use',
+              title: 'Low use',
+              category: TaskCategory.work,
+              isFavorite: true,
+              sortOrder: 5,
+              completedCount: 2,
+            ),
+            TaskCatalogItem(
+              id: 'catalog-high-use',
+              title: 'High use',
+              category: TaskCategory.study,
+              isFavorite: true,
+              sortOrder: 1,
+              completedCount: 4,
+            ),
+          ],
+          totalXp: 0,
+          stats: CharacterStats.zero,
+          potionChargeCategories: const [],
+        ),
+      );
+
+      await _pumpApp(tester, taskService: service);
+      await tester.tap(find.text('Favorites'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Favorites'), findsWidgets);
+      expect(find.text('Most used'), findsOneWidget);
+      expect(find.text('Library'), findsOneWidget);
+      expect(find.text('Completed 4 times'), findsOneWidget);
+      expect(find.text('Completed 2 times'), findsOneWidget);
+
+      final highUseTop = tester.getTopLeft(find.text('High use'));
+      final lowUseTop = tester.getTopLeft(find.text('Low use'));
+      expect(highUseTop.dy, lessThan(lowUseTop.dy));
+
+      await tester.tap(find.text('Library'));
+      await tester.pumpAndSettle();
+
+      final libraryLowUseTop = tester.getTopLeft(find.text('Low use'));
+      final libraryHighUseTop = tester.getTopLeft(find.text('High use'));
+      expect(libraryLowUseTop.dy, lessThan(libraryHighUseTop.dy));
+    },
+  );
+
+  testWidgets(
+    'active task favorite action adds the task to the favorites tab',
+    (WidgetTester tester) async {
+      await _pumpApp(tester);
+
+      await _scrollToText(tester, 'Active Tasks');
+      await tester.tap(find.widgetWithText(TextButton, '+ Favorite').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Favorited'), findsOneWidget);
+      expect(find.text('Saved to favorites.'), findsOneWidget);
+
+      await tester.tap(find.text('Favorites'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('task-library-action')), findsNothing);
+      expect(find.text('Refill water flask'), findsOneWidget);
+      expect(find.text('Completed 0 times'), findsOneWidget);
+      expect(find.text('Already active'), findsOneWidget);
     },
   );
 
