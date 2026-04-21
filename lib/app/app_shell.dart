@@ -1,15 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
 import 'package:progress_potion/screens/admin_tools/admin_tools_screen.dart';
 import 'package:progress_potion/screens/add_task/add_task_screen.dart';
+import 'package:progress_potion/screens/completed_tasks/completed_tasks_screen.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
+import 'package:progress_potion/services/feedback_sound_service.dart';
 import 'package:progress_potion/services/task_service.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.taskService});
+  const AppShell({
+    super.key,
+    required this.taskService,
+    this.feedbackSoundPlayer,
+  });
 
   final TaskService taskService;
+  final FeedbackSoundPlayer? feedbackSoundPlayer;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -17,22 +26,33 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late final TaskController _taskController;
+  late final FeedbackSoundPlayer _feedbackSoundPlayer;
+  late final bool _ownsFeedbackSoundPlayer;
   late final Future<void> _initialLoad;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _taskController = TaskController(taskService: widget.taskService);
+    _ownsFeedbackSoundPlayer = widget.feedbackSoundPlayer == null;
+    _feedbackSoundPlayer =
+        widget.feedbackSoundPlayer ?? FeedbackSoundService();
+    unawaited(_feedbackSoundPlayer.preload());
     _initialLoad = _taskController.loadTasks();
   }
 
   @override
   void dispose() {
     _taskController.dispose();
+    if (_ownsFeedbackSoundPlayer) {
+      _feedbackSoundPlayer.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _openAddTaskScreen() async {
+    _feedbackSoundPlayer.play(FeedbackSound.buttonTap);
     await _initialLoad;
     if (!mounted) {
       return;
@@ -40,7 +60,10 @@ class _AppShellState extends State<AppShell> {
 
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => AddTaskScreen(taskController: _taskController),
+        builder: (_) => AddTaskScreen(
+          taskController: _taskController,
+          feedbackSoundPlayer: _feedbackSoundPlayer,
+        ),
       ),
     );
   }
@@ -74,14 +97,63 @@ class _AppShellState extends State<AppShell> {
                 child: const Text('ProgressPotion'),
               )
             : const Text('ProgressPotion'),
+        actions: [
+          if (_selectedIndex == 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: FilledButton.icon(
+                key: const ValueKey('task-library-action'),
+                onPressed: _openAddTaskScreen,
+                icon: const Icon(Icons.add_task_rounded),
+                label: const Text('Add Task'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
-      body: HomeScreen(taskController: _taskController),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddTaskScreen,
-        icon: const Icon(Icons.add_task),
-        label: const Text('Task library'),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          HomeScreen(
+            taskController: _taskController,
+            feedbackSoundPlayer: _feedbackSoundPlayer,
+          ),
+          CompletedTasksScreen(taskController: _taskController),
+        ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          if (index != _selectedIndex) {
+            _feedbackSoundPlayer.play(FeedbackSound.buttonTap);
+          }
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.local_drink_outlined),
+            selectedIcon: Icon(Icons.local_drink),
+            label: 'Active',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.task_alt_outlined),
+            selectedIcon: Icon(Icons.task_alt),
+            label: 'Completed',
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
+import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/services/feedback_sound_service.dart';
 import 'package:progress_potion/widgets/potion_progress_card.dart';
 import 'package:progress_potion/widgets/potion_reward_dialog.dart';
 import 'package:progress_potion/widgets/task_tile.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.taskController});
+  const HomeScreen({
+    super.key,
+    required this.taskController,
+    this.feedbackSoundPlayer = const NoOpFeedbackSoundPlayer(),
+  });
 
   final TaskController taskController;
+  final FeedbackSoundPlayer feedbackSoundPlayer;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -21,12 +28,26 @@ class _HomeScreenState extends State<HomeScreen> {
     await widget.taskController.removeActiveTask(id);
   }
 
+  Future<void> _completeTask(Task task) async {
+    final wasActive = widget.taskController.activeTasks.any(
+      (activeTask) => activeTask.id == task.id,
+    );
+
+    await widget.taskController.completeTask(task.id);
+    if (!mounted || !wasActive) {
+      return;
+    }
+
+    widget.feedbackSoundPlayer.play(FeedbackSound.taskComplete);
+  }
+
   Future<void> _drinkPotion(BuildContext context) async {
     if (_isDrinkingPotion) {
       return;
     }
 
     final disableAnimations = MediaQuery.of(context).disableAnimations;
+    widget.feedbackSoundPlayer.play(FeedbackSound.potionDrink);
 
     setState(() {
       _isDrinkingPotion = true;
@@ -65,6 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return PotionRewardDialog(
           reward: reward,
           totalXp: widget.taskController.totalXp,
+          feedbackSoundPlayer: widget.feedbackSoundPlayer,
         );
       },
     );
@@ -96,7 +118,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final activeTasks = widget.taskController.activeTasks;
-        final completedTasks = widget.taskController.completedTasks;
 
         return DecoratedBox(
           decoration: const BoxDecoration(
@@ -119,7 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: _BackdropGlow(size: 220, color: const Color(0x22E06B4C)),
               ),
               ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                 children: [
                   PotionProgressCard(
                     xp: widget.taskController.totalXp,
@@ -137,49 +158,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     canDrinkPotion: widget.taskController.canDrinkPotion,
                     isDrinkingPotion: _isDrinkingPotion,
                     celebrationCount: _celebrationCount,
+                    feedbackSoundPlayer: widget.feedbackSoundPlayer,
                     onDrinkPotion: () => _drinkPotion(context),
                   ),
-                  const SizedBox(height: 18),
-                  _SectionHeader(
-                    title: 'Active Tasks',
-                    subtitle: activeTasks.isEmpty
-                        ? 'No active tasks yet. Add one from the library to start brewing.'
-                        : 'Complete tasks to fill the potion with category energy.',
-                  ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+                  const _SectionHeader(title: 'Active Tasks'),
+                  const SizedBox(height: 10),
                   if (activeTasks.isEmpty)
-                    const _EmptyStateCard(
-                      title: 'No active tasks',
-                      message:
-                          'Open the task library to choose a category and add a fresh objective.',
-                    )
+                    const _EmptyStateCard(title: 'No active tasks')
                   else
                     for (final task in activeTasks) ...[
                       TaskTile(
                         task: task,
-                        onComplete: () =>
-                            widget.taskController.completeTask(task.id),
+                        onComplete: () => _completeTask(task),
                         onRemove: () => _removeActiveTask(task.id),
                       ),
-                      const SizedBox(height: 12),
-                    ],
-                  const SizedBox(height: 28),
-                  const _SectionHeader(
-                    title: 'Completed Tasks',
-                    subtitle:
-                        'Finished tasks stay here and their energy remains stored in the potion queue.',
-                  ),
-                  const SizedBox(height: 12),
-                  if (completedTasks.isEmpty)
-                    const _EmptyStateCard(
-                      title: 'Nothing completed yet',
-                      message:
-                          'Complete an active task to store a charge toward your next potion.',
-                    )
-                  else
-                    for (final task in completedTasks) ...[
-                      TaskTile(task: task),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                     ],
                 ],
               ),
@@ -192,54 +186,36 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.subtitle});
+  const _SectionHeader({required this.title});
 
   final String title;
-  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(subtitle, style: theme.textTheme.bodyMedium),
-      ],
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w900,
+      ),
     );
   }
 }
 
 class _EmptyStateCard extends StatelessWidget {
-  const _EmptyStateCard({required this.title, required this.message});
+  const _EmptyStateCard({required this.title});
 
   final String title;
-  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(message, style: Theme.of(context).textTheme.bodyMedium),
-          ],
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
     );

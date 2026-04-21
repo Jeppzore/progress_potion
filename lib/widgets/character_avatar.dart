@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:progress_potion/models/character_stats.dart';
@@ -25,11 +24,23 @@ class CharacterAvatar extends StatefulWidget {
   State<CharacterAvatar> createState() => _CharacterAvatarState();
 }
 
+enum _AvatarPose {
+  resting('resting', 'resting', 'Tap to wake and stretch your companion'),
+  bending('bending', 'finding balance', 'Tap for a balancing wobble'),
+  standingTall('standing-tall', 'standing tall', 'Tap for a proud hop');
+
+  const _AvatarPose(this.keyName, this.semanticsLabel, this.tapHint);
+
+  final String keyName;
+  final String semanticsLabel;
+  final String tapHint;
+}
+
 class _CharacterAvatarState extends State<CharacterAvatar>
     with TickerProviderStateMixin {
   late final AnimationController _idleController;
   late final AnimationController _celebrationController;
-  late final AnimationController _waveController;
+  late final AnimationController _reactionController;
   bool _animationsDisabled = false;
   int _reducedMotionPulseToken = 0;
   bool _showReducedMotionPulse = false;
@@ -45,7 +56,7 @@ class _CharacterAvatarState extends State<CharacterAvatar>
       vsync: this,
       duration: const Duration(milliseconds: 950),
     );
-    _waveController = AnimationController(
+    _reactionController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
     );
@@ -74,14 +85,14 @@ class _CharacterAvatarState extends State<CharacterAvatar>
       return;
     }
 
-    if (celebrationChanged || interactionChanged) {
+    if (celebrationChanged) {
       _celebrationController
         ..stop()
         ..forward(from: 0);
     }
 
     if (interactionChanged) {
-      _waveController
+      _reactionController
         ..stop()
         ..forward(from: 0);
     }
@@ -109,7 +120,7 @@ class _CharacterAvatarState extends State<CharacterAvatar>
     if (_animationsDisabled) {
       _idleController.stop();
       _celebrationController.stop();
-      _waveController.stop();
+      _reactionController.stop();
       return;
     }
 
@@ -122,7 +133,7 @@ class _CharacterAvatarState extends State<CharacterAvatar>
   void dispose() {
     _idleController.dispose();
     _celebrationController.dispose();
-    _waveController.dispose();
+    _reactionController.dispose();
     super.dispose();
   }
 
@@ -134,9 +145,10 @@ class _CharacterAvatarState extends State<CharacterAvatar>
       animation: Listenable.merge([
         _idleController,
         _celebrationController,
-        _waveController,
+        _reactionController,
       ]),
       builder: (context, _) {
+        final pose = _poseForVitality(widget.stats.vitality);
         final idlePhase = _animationsDisabled
             ? 0.5
             : Curves.easeInOut.transform(_idleController.value);
@@ -148,11 +160,25 @@ class _CharacterAvatarState extends State<CharacterAvatar>
             : math.sin(_celebrationController.value * math.pi);
         final celebrationLift = celebrationBurst * 10;
         final celebrationRotate = celebrationBurst * 0.028;
-        final waveSwing = _animationsDisabled
+        final reactionProgress = _animationsDisabled
             ? 0.0
-            : math.sin(_waveController.value * math.pi * 3.2) *
-                  (1 - _waveController.value) *
-                  0.75;
+            : _reactionController.value.clamp(0.0, 1.0);
+        final reactionBurst = math.sin(reactionProgress * math.pi);
+        final reactionWobble =
+            math.sin(reactionProgress * math.pi * 4) * (1 - reactionProgress);
+        final reactionLift = switch (pose) {
+          _AvatarPose.resting => reactionBurst * 4,
+          _AvatarPose.bending => reactionBurst * 2,
+          _AvatarPose.standingTall => reactionBurst * 12,
+        };
+        final reactionOffsetX = pose == _AvatarPose.bending
+            ? reactionWobble * 6
+            : 0.0;
+        final reactionRotate = switch (pose) {
+          _AvatarPose.resting => -reactionBurst * 0.035,
+          _AvatarPose.bending => reactionWobble * 0.08,
+          _AvatarPose.standingTall => reactionWobble * 0.03,
+        };
         final auraOpacity =
             (0.12 + (idlePhase * 0.05) + (celebrationBurst * 0.2)).clamp(
               0.0,
@@ -162,16 +188,17 @@ class _CharacterAvatarState extends State<CharacterAvatar>
         final figure = _AvatarFigure(
           size: widget.size,
           stats: widget.stats,
+          pose: pose,
           idlePhase: idlePhase,
-          waveSwing: waveSwing,
+          reactionProgress: reactionProgress,
         );
 
         final tappableFigure = widget.onTap == null
             ? figure
             : Semantics(
                 button: true,
-                label: 'Potionkeeper companion',
-                hint: 'Tap to encourage your companion',
+                label: 'Potionkeeper companion, ${pose.semanticsLabel}',
+                hint: pose.tapHint,
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
@@ -182,6 +209,13 @@ class _CharacterAvatarState extends State<CharacterAvatar>
                   ),
                 ),
               );
+        final reactingFigure =
+            !_animationsDisabled && _reactionController.value > 0
+            ? KeyedSubtree(
+                key: ValueKey('avatar-${pose.keyName}-reaction'),
+                child: tappableFigure,
+              )
+            : tappableFigure;
 
         return SizedBox(
           width: widget.size.width,
@@ -240,10 +274,13 @@ class _CharacterAvatarState extends State<CharacterAvatar>
                 ),
               ),
               Transform.translate(
-                offset: Offset(0, idleFloat - celebrationLift),
+                offset: Offset(
+                  reactionOffsetX,
+                  idleFloat - celebrationLift - reactionLift,
+                ),
                 child: Transform.rotate(
-                  angle: celebrationRotate,
-                  child: tappableFigure,
+                  angle: celebrationRotate + reactionRotate,
+                  child: reactingFigure,
                 ),
               ),
               if (!_animationsDisabled && _celebrationController.value > 0)
@@ -310,64 +347,53 @@ class _AvatarFigure extends StatelessWidget {
   const _AvatarFigure({
     required this.size,
     required this.stats,
+    required this.pose,
     required this.idlePhase,
-    required this.waveSwing,
+    required this.reactionProgress,
   });
 
   final Size size;
   final CharacterStats stats;
+  final _AvatarPose pose;
   final double idlePhase;
-  final double waveSwing;
+  final double reactionProgress;
 
   @override
   Widget build(BuildContext context) {
     final strengthLevel = _traitLevel(stats.strength, maxValue: 12);
-    final vitalityPosture = _vitalityPosture(stats.vitality);
     final wisdomLevel = _traitLevel(stats.wisdom, maxValue: 10);
     final mindfulnessLevel = _traitLevel(stats.mindfulness, maxValue: 10);
-    final seatedLevel = 1 - vitalityPosture;
+    final reactionBurst = math.sin(reactionProgress * math.pi);
+    final reactionWobble =
+        math.sin(reactionProgress * math.pi * 4) * (1 - reactionProgress);
 
     double sx(double value) => value * (size.width / 150);
     double sy(double value) => value * (size.height / 180);
 
-    final headSize = sx(68 + (wisdomLevel * 6) + (vitalityPosture * 2));
-    final headTop = sy(42 - (vitalityPosture * 26));
-    final neckTop = headTop + sy(56);
-    final neckHeight = sy(10 + (vitalityPosture * 8));
-    final torsoTop = sy(96 - (vitalityPosture * 26));
-    final torsoWidth = sx(76 + (strengthLevel * 16) + (vitalityPosture * 6));
-    final torsoHeight = sy(
-      58 + (vitalityPosture * 18) + (strengthLevel * 8) + (idlePhase * 1.5),
-    );
+    final headSize = sx(68 + (wisdomLevel * 6));
     final armWidth = sx(16 + (strengthLevel * 5));
-    final armHeight = sy(44 + (vitalityPosture * 18) + (strengthLevel * 10));
-    final armTop = torsoTop + sy(8);
-    final armInset = sx(14 - (strengthLevel * 2) - (vitalityPosture * 1.5));
-    final legTop = torsoTop + torsoHeight - sy(10);
     final legWidth = sx(18 + (strengthLevel * 4));
-    final legHeight = sy(42 + (vitalityPosture * 40));
-    final legInset = sx(40 - (vitalityPosture * 7));
-    final footWidth = sx(28 + (vitalityPosture * 8));
-    final footInset = sx(27 - (vitalityPosture * 4));
     final footHeight = sy(12);
-    final seatTop = legTop - sy(10);
-    final seatOpacity = (0.55 * seatedLevel).clamp(0.0, 0.55);
     final smileSize = Size(
       sx(17 + (mindfulnessLevel * 14)),
       sy(6 + (mindfulnessLevel * 5)),
     );
-    final leftArmAngle =
-        lerpDouble(-0.95, -0.18, vitalityPosture)! + (mindfulnessLevel * 0.08);
-    final rightArmAngle =
-        lerpDouble(0.95, 0.18, vitalityPosture)! -
-        (mindfulnessLevel * 0.05) -
-        waveSwing;
+    final poseMetrics = _PoseMetrics.forPose(
+      pose: pose,
+      sx: sx,
+      sy: sy,
+      strengthLevel: strengthLevel,
+      mindfulnessLevel: mindfulnessLevel,
+      idlePhase: idlePhase,
+      reactionBurst: reactionBurst,
+      reactionWobble: reactionWobble,
+    );
     final beardHeight = wisdomLevel <= 0.14 ? 0.0 : sy(8 + (wisdomLevel * 12));
-    final beardTop = headTop + (headSize * 0.78);
-    final mouthTop = headTop + (headSize * 0.60);
-    final browTop = headTop + (headSize * 0.31);
+    final beardTop = poseMetrics.headTop + (headSize * 0.78);
+    final mouthTop = poseMetrics.headTop + (headSize * 0.60);
+    final browTop = poseMetrics.headTop + (headSize * 0.31);
     final browInset = sx(16);
-    final eyeTop = headTop + (headSize * 0.44);
+    final eyeTop = poseMetrics.headTop + (headSize * 0.44);
     final eyeInset = sx(19);
     final hairHeight = sy(15 + (wisdomLevel * 4));
     final hairInset = sx(12);
@@ -378,14 +404,14 @@ class _AvatarFigure extends StatelessWidget {
       child: Stack(
         alignment: Alignment.bottomCenter,
         children: [
-          if (seatOpacity > 0.02)
+          if (poseMetrics.platformOpacity > 0)
             Positioned(
               key: const ValueKey('avatar-seat'),
-              top: seatTop,
+              top: poseMetrics.platformTop,
               child: Opacity(
-                opacity: seatOpacity,
+                opacity: poseMetrics.platformOpacity,
                 child: Container(
-                  width: sx(92),
+                  width: poseMetrics.platformWidth,
                   height: sy(15),
                   decoration: BoxDecoration(
                     color: const Color(0xFFB88D67),
@@ -395,243 +421,276 @@ class _AvatarFigure extends StatelessWidget {
               ),
             ),
           Positioned(
-            top: headTop,
-            child: Container(
-              key: const ValueKey('avatar-head'),
-              width: headSize,
-              height: headSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFF8CFB6), Color(0xFFEDA67E)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+            key: ValueKey('avatar-pose-${pose.keyName}'),
+            bottom: 0,
+            child: const SizedBox.shrink(),
+          ),
+          Positioned(
+            top: poseMetrics.headTop,
+            left: poseMetrics.headLeft,
+            child: Transform.rotate(
+              angle: poseMetrics.headAngle,
+              child: Container(
+                key: const ValueKey('avatar-head'),
+                width: headSize,
+                height: headSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF8CFB6), Color(0xFFEDA67E)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF8B4E3C).withValues(alpha: 0.10),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF8B4E3C).withValues(alpha: 0.10),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    top: sy(6),
-                    left: hairInset,
-                    right: hairInset,
-                    child: Container(
-                      key: const ValueKey('avatar-hairline'),
-                      height: hairHeight,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF3C2D4E), Color(0xFF5E456D)],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(sx(24)),
-                          bottom: Radius.circular(sx(14)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: browTop,
-                    left: browInset,
-                    child: _Brow(
-                      key: const ValueKey('avatar-left-brow'),
-                      angle: -0.16 + (mindfulnessLevel * 0.08),
-                      width: sx(14 + (wisdomLevel * 4)),
-                    ),
-                  ),
-                  Positioned(
-                    top: browTop,
-                    right: browInset,
-                    child: _Brow(
-                      key: const ValueKey('avatar-right-brow'),
-                      angle: 0.16 - (mindfulnessLevel * 0.08),
-                      width: sx(14 + (wisdomLevel * 4)),
-                    ),
-                  ),
-                  Positioned(
-                    top: eyeTop,
-                    left: eyeInset,
-                    child: _FaceDot(smileLevel: mindfulnessLevel, size: sx(8)),
-                  ),
-                  Positioned(
-                    top: eyeTop,
-                    right: eyeInset,
-                    child: _FaceDot(smileLevel: mindfulnessLevel, size: sx(8)),
-                  ),
-                  Positioned(
-                    top: headTop + (headSize * 0.50) - headTop,
-                    left: (headSize / 2) - sx(2),
-                    child: Container(
-                      width: sx(4),
-                      height: sy(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFC67D5F).withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  if (mindfulnessLevel > 0.12)
+                child: Stack(
+                  children: [
                     Positioned(
-                      top: headSize * 0.56,
-                      left: sx(10),
-                      child: _CheekGlow(
-                        opacity: 0.10 + (mindfulnessLevel * 0.12),
-                        size: sx(10),
-                      ),
-                    ),
-                  if (mindfulnessLevel > 0.12)
-                    Positioned(
-                      top: headSize * 0.56,
-                      right: sx(10),
-                      child: _CheekGlow(
-                        opacity: 0.10 + (mindfulnessLevel * 0.12),
-                        size: sx(10),
-                      ),
-                    ),
-                  Positioned(
-                    top: mouthTop - headTop,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: SizedBox(
-                        key: const ValueKey('avatar-mouth'),
-                        width: smileSize.width,
-                        height: smileSize.height,
-                        child: CustomPaint(
-                          painter: _MouthPainter(smileLevel: mindfulnessLevel),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (beardHeight > 0)
-                    Positioned(
-                      top: beardTop - headTop,
-                      left: sx(15 - (wisdomLevel * 3)),
-                      right: sx(15 - (wisdomLevel * 3)),
+                      top: sy(6),
+                      left: hairInset,
+                      right: hairInset,
                       child: Container(
-                        key: const ValueKey('avatar-beard'),
-                        height: beardHeight,
+                        key: const ValueKey('avatar-hairline'),
+                        height: hairHeight,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(
-                                0xFF765344,
-                              ).withValues(alpha: 0.82 + (wisdomLevel * 0.10)),
-                              const Color(
-                                0xFF4B362C,
-                              ).withValues(alpha: 0.92 + (wisdomLevel * 0.06)),
-                            ],
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF3C2D4E), Color(0xFF5E456D)],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                           ),
                           borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(sx(7)),
-                            bottom: Radius.circular(sx(20)),
+                            top: Radius.circular(sx(24)),
+                            bottom: Radius.circular(sx(14)),
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: neckTop,
-            child: Container(
-              width: sx(20),
-              height: neckHeight,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1B493),
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(sx(10)),
+                    Positioned(
+                      top: browTop - poseMetrics.headTop,
+                      left: browInset,
+                      child: _Brow(
+                        key: const ValueKey('avatar-left-brow'),
+                        angle: -0.16 + (mindfulnessLevel * 0.08),
+                        width: sx(14 + (wisdomLevel * 4)),
+                      ),
+                    ),
+                    Positioned(
+                      top: browTop - poseMetrics.headTop,
+                      right: browInset,
+                      child: _Brow(
+                        key: const ValueKey('avatar-right-brow'),
+                        angle: 0.16 - (mindfulnessLevel * 0.08),
+                        width: sx(14 + (wisdomLevel * 4)),
+                      ),
+                    ),
+                    Positioned(
+                      top: eyeTop - poseMetrics.headTop,
+                      left: eyeInset,
+                      child: _FaceDot(
+                        smileLevel: mindfulnessLevel,
+                        size: sx(8),
+                      ),
+                    ),
+                    Positioned(
+                      top: eyeTop - poseMetrics.headTop,
+                      right: eyeInset,
+                      child: _FaceDot(
+                        smileLevel: mindfulnessLevel,
+                        size: sx(8),
+                      ),
+                    ),
+                    Positioned(
+                      top: headSize * 0.50,
+                      left: (headSize / 2) - sx(2),
+                      child: Container(
+                        width: sx(4),
+                        height: sy(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC67D5F).withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    if (mindfulnessLevel > 0.12)
+                      Positioned(
+                        top: headSize * 0.56,
+                        left: sx(10),
+                        child: _CheekGlow(
+                          opacity: 0.10 + (mindfulnessLevel * 0.12),
+                          size: sx(10),
+                        ),
+                      ),
+                    if (mindfulnessLevel > 0.12)
+                      Positioned(
+                        top: headSize * 0.56,
+                        right: sx(10),
+                        child: _CheekGlow(
+                          opacity: 0.10 + (mindfulnessLevel * 0.12),
+                          size: sx(10),
+                        ),
+                      ),
+                    Positioned(
+                      top: mouthTop - poseMetrics.headTop,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: SizedBox(
+                          key: const ValueKey('avatar-mouth'),
+                          width: smileSize.width,
+                          height: smileSize.height,
+                          child: CustomPaint(
+                            painter: _MouthPainter(
+                              smileLevel: mindfulnessLevel,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (beardHeight > 0)
+                      Positioned(
+                        top: beardTop - poseMetrics.headTop,
+                        left: sx(15 - (wisdomLevel * 3)),
+                        right: sx(15 - (wisdomLevel * 3)),
+                        child: Container(
+                          key: const ValueKey('avatar-beard'),
+                          height: beardHeight,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xFF765344).withValues(
+                                  alpha: 0.82 + (wisdomLevel * 0.10),
+                                ),
+                                const Color(0xFF4B362C).withValues(
+                                  alpha: 0.92 + (wisdomLevel * 0.06),
+                                ),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(sx(7)),
+                              bottom: Radius.circular(sx(20)),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
           ),
           Positioned(
-            top: torsoTop,
-            child: Container(
-              key: const ValueKey('avatar-torso'),
-              width: torsoWidth,
-              height: torsoHeight,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(sx(28)),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF446AFF), Color(0xFF2747B4)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF2747B4).withValues(alpha: 0.18),
-                    blurRadius: 18,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: armTop,
-            left: armInset,
+            top: poseMetrics.neckTop,
+            left: poseMetrics.neckLeft,
             child: Transform.rotate(
-              angle: leftArmAngle,
+              angle: poseMetrics.torsoAngle,
+              child: Container(
+                width: sx(20),
+                height: poseMetrics.neckHeight,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1B493),
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(sx(10)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: poseMetrics.torsoTop,
+            left: poseMetrics.torsoLeft,
+            child: Transform.rotate(
+              angle: poseMetrics.torsoAngle,
+              child: Container(
+                key: const ValueKey('avatar-torso'),
+                width: poseMetrics.torsoWidth,
+                height: poseMetrics.torsoHeight,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(sx(28)),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF446AFF), Color(0xFF2747B4)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2747B4).withValues(alpha: 0.18),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: poseMetrics.armTop,
+            left: poseMetrics.leftArmLeft,
+            child: Transform.rotate(
+              angle: poseMetrics.leftArmAngle,
               alignment: Alignment.topCenter,
               child: _Limb(
                 key: const ValueKey('avatar-left-arm'),
                 width: armWidth,
-                height: armHeight,
+                height: poseMetrics.armHeight,
                 color: const Color(0xFFF2B28C),
               ),
             ),
           ),
           Positioned(
-            top: armTop,
-            right: armInset,
+            top: poseMetrics.armTop,
+            right: poseMetrics.rightArmRight,
             child: Transform.rotate(
-              angle: rightArmAngle,
+              angle: poseMetrics.rightArmAngle,
               alignment: Alignment.topCenter,
               child: _Limb(
                 key: const ValueKey('avatar-right-arm'),
                 width: armWidth,
-                height: armHeight,
+                height: poseMetrics.armHeight,
                 color: const Color(0xFFF2B28C),
               ),
             ),
           ),
           Positioned(
-            top: legTop,
-            left: legInset,
-            child: _Limb(
-              key: const ValueKey('avatar-left-leg'),
-              width: legWidth,
-              height: legHeight,
-              color: const Color(0xFF26304C),
+            top: poseMetrics.legTop,
+            left: poseMetrics.leftLegLeft,
+            child: Transform.rotate(
+              angle: poseMetrics.leftLegAngle,
+              alignment: Alignment.topCenter,
+              child: _Limb(
+                key: const ValueKey('avatar-left-leg'),
+                width: legWidth,
+                height: poseMetrics.legHeight,
+                color: const Color(0xFF26304C),
+              ),
             ),
           ),
           Positioned(
-            top: legTop,
-            right: legInset,
-            child: _Limb(
-              key: const ValueKey('avatar-right-leg'),
-              width: legWidth,
-              height: legHeight,
-              color: const Color(0xFF26304C),
+            top: poseMetrics.legTop,
+            right: poseMetrics.rightLegRight,
+            child: Transform.rotate(
+              angle: poseMetrics.rightLegAngle,
+              alignment: Alignment.topCenter,
+              child: _Limb(
+                key: const ValueKey('avatar-right-leg'),
+                width: legWidth,
+                height: poseMetrics.legHeight,
+                color: const Color(0xFF26304C),
+              ),
             ),
           ),
           Positioned(
             bottom: 0,
-            left: footInset,
+            left: poseMetrics.leftFootLeft,
             child: Container(
               key: const ValueKey('avatar-left-foot'),
-              width: footWidth,
+              width: poseMetrics.footWidth,
               height: footHeight,
               decoration: BoxDecoration(
                 color: const Color(0xFF16213A),
@@ -641,10 +700,10 @@ class _AvatarFigure extends StatelessWidget {
           ),
           Positioned(
             bottom: 0,
-            right: footInset,
+            right: poseMetrics.rightFootRight,
             child: Container(
               key: const ValueKey('avatar-right-foot'),
-              width: footWidth,
+              width: poseMetrics.footWidth,
               height: footHeight,
               decoration: BoxDecoration(
                 color: const Color(0xFF16213A),
@@ -655,6 +714,182 @@ class _AvatarFigure extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _PoseMetrics {
+  const _PoseMetrics({
+    required this.headTop,
+    required this.headLeft,
+    required this.headAngle,
+    required this.neckTop,
+    required this.neckLeft,
+    required this.neckHeight,
+    required this.torsoTop,
+    required this.torsoLeft,
+    required this.torsoWidth,
+    required this.torsoHeight,
+    required this.torsoAngle,
+    required this.armTop,
+    required this.leftArmLeft,
+    required this.rightArmRight,
+    required this.armHeight,
+    required this.leftArmAngle,
+    required this.rightArmAngle,
+    required this.legTop,
+    required this.leftLegLeft,
+    required this.rightLegRight,
+    required this.legHeight,
+    required this.leftLegAngle,
+    required this.rightLegAngle,
+    required this.leftFootLeft,
+    required this.rightFootRight,
+    required this.footWidth,
+    required this.platformTop,
+    required this.platformWidth,
+    required this.platformOpacity,
+  });
+
+  final double headTop;
+  final double headLeft;
+  final double headAngle;
+  final double neckTop;
+  final double neckLeft;
+  final double neckHeight;
+  final double torsoTop;
+  final double torsoLeft;
+  final double torsoWidth;
+  final double torsoHeight;
+  final double torsoAngle;
+  final double armTop;
+  final double leftArmLeft;
+  final double rightArmRight;
+  final double armHeight;
+  final double leftArmAngle;
+  final double rightArmAngle;
+  final double legTop;
+  final double leftLegLeft;
+  final double rightLegRight;
+  final double legHeight;
+  final double leftLegAngle;
+  final double rightLegAngle;
+  final double leftFootLeft;
+  final double rightFootRight;
+  final double footWidth;
+  final double platformTop;
+  final double platformWidth;
+  final double platformOpacity;
+
+  factory _PoseMetrics.forPose({
+    required _AvatarPose pose,
+    required double Function(double value) sx,
+    required double Function(double value) sy,
+    required double strengthLevel,
+    required double mindfulnessLevel,
+    required double idlePhase,
+    required double reactionBurst,
+    required double reactionWobble,
+  }) {
+    return switch (pose) {
+      _AvatarPose.resting => _PoseMetrics(
+        headTop: sy(55 - (reactionBurst * 5)),
+        headLeft: sx(34),
+        headAngle: -0.16 + (reactionBurst * 0.08),
+        neckTop: sy(106 - (reactionBurst * 5)),
+        neckLeft: sx(66),
+        neckHeight: sy(9 + (reactionBurst * 4)),
+        torsoTop: sy(109 - (reactionBurst * 7)),
+        torsoLeft: sx(36),
+        torsoWidth: sx(78 + (strengthLevel * 14) + (reactionBurst * 4)),
+        torsoHeight: sy(
+          46 + (strengthLevel * 7) + (idlePhase * 1.2) + (reactionBurst * 6),
+        ),
+        torsoAngle: -0.10 + (reactionBurst * 0.06),
+        armTop: sy(116 - (reactionBurst * 9)),
+        leftArmLeft: sx(21 - (strengthLevel * 2)),
+        rightArmRight: sx(18 - (strengthLevel * 2)),
+        armHeight: sy(36 + (strengthLevel * 8) + (reactionBurst * 15)),
+        leftArmAngle: -1.05 - (reactionBurst * 0.38),
+        rightArmAngle:
+            1.02 + (reactionBurst * 0.34) - (mindfulnessLevel * 0.04),
+        legTop: sy(145 - (reactionBurst * 3)),
+        leftLegLeft: sx(31),
+        rightLegRight: sx(31),
+        legHeight: sy(34 + (strengthLevel * 5)),
+        leftLegAngle: -0.86,
+        rightLegAngle: 0.86,
+        leftFootLeft: sx(19),
+        rightFootRight: sx(19),
+        footWidth: sx(32),
+        platformTop: sy(151),
+        platformWidth: sx(114),
+        platformOpacity: 0.58,
+      ),
+      _AvatarPose.bending => _PoseMetrics(
+        headTop: sy(35 + (reactionWobble * 1.4)),
+        headLeft: sx(29 + (reactionWobble * 2)),
+        headAngle: -0.12 + (reactionWobble * 0.04),
+        neckTop: sy(91),
+        neckLeft: sx(62),
+        neckHeight: sy(13),
+        torsoTop: sy(90),
+        torsoLeft: sx(36 + (reactionWobble * 2)),
+        torsoWidth: sx(80 + (strengthLevel * 16)),
+        torsoHeight: sy(61 + (strengthLevel * 8) + (idlePhase * 1.3)),
+        torsoAngle: -0.22 + (reactionWobble * 0.07),
+        armTop: sy(99),
+        leftArmLeft: sx(15 - (strengthLevel * 2)),
+        rightArmRight: sx(13 - (strengthLevel * 2)),
+        armHeight: sy(54 + (strengthLevel * 9)),
+        leftArmAngle: -0.64 - (reactionWobble * 0.15),
+        rightArmAngle:
+            0.62 + (reactionWobble * 0.18) - (mindfulnessLevel * 0.04),
+        legTop: sy(136),
+        leftLegLeft: sx(38),
+        rightLegRight: sx(37),
+        legHeight: sy(48 + (strengthLevel * 7)),
+        leftLegAngle: -0.28,
+        rightLegAngle: 0.30,
+        leftFootLeft: sx(25),
+        rightFootRight: sx(22),
+        footWidth: sx(34),
+        platformTop: 0,
+        platformWidth: 0,
+        platformOpacity: 0,
+      ),
+      _AvatarPose.standingTall => _PoseMetrics(
+        headTop: sy(20 - (reactionBurst * 5)),
+        headLeft: sx(41),
+        headAngle: reactionWobble * 0.025,
+        neckTop: sy(76 - (reactionBurst * 5)),
+        neckLeft: sx(65),
+        neckHeight: sy(18),
+        torsoTop: sy(86 - (reactionBurst * 6)),
+        torsoLeft: sx(33),
+        torsoWidth: sx(86 + (strengthLevel * 16)),
+        torsoHeight: sy(61 + (strengthLevel * 8) + (idlePhase * 1.4)),
+        torsoAngle: reactionWobble * 0.025,
+        armTop: sy(96 - (reactionBurst * 6)),
+        leftArmLeft: sx(16 - (strengthLevel * 2)),
+        rightArmRight: sx(16 - (strengthLevel * 2)),
+        armHeight: sy(62 + (strengthLevel * 10)),
+        leftArmAngle: -0.20 + (mindfulnessLevel * 0.05),
+        rightArmAngle:
+            0.18 - (reactionBurst * 1.12) - (mindfulnessLevel * 0.04),
+        legTop: sy(139 - (reactionBurst * 5)),
+        leftLegLeft: sx(44),
+        rightLegRight: sx(44),
+        legHeight: sy(50 + (strengthLevel * 9)),
+        leftLegAngle: -0.04,
+        rightLegAngle: 0.04,
+        leftFootLeft: sx(31),
+        rightFootRight: sx(31),
+        footWidth: sx(38),
+        platformTop: 0,
+        platformWidth: 0,
+        platformOpacity: 0,
+      ),
+    };
   }
 }
 
@@ -779,56 +1014,12 @@ double _traitLevel(int value, {required int maxValue}) {
   return (value / maxValue).clamp(0.0, 1.0);
 }
 
-double _vitalityPosture(int vitality) {
-  if (vitality <= 0) {
-    return 0;
-  }
-  if (vitality >= 100) {
-    return 1;
-  }
+_AvatarPose _poseForVitality(int vitality) {
   if (vitality <= 24) {
-    return _segmentProgress(
-      vitality,
-      startValue: 0,
-      endValue: 24,
-      startOutput: 0,
-      endOutput: 0.18,
-      curve: Curves.easeOutCubic,
-    );
+    return _AvatarPose.resting;
   }
   if (vitality <= 59) {
-    return _segmentProgress(
-      vitality,
-      startValue: 25,
-      endValue: 59,
-      startOutput: 0.18,
-      endOutput: 0.58,
-      curve: Curves.easeInOutCubic,
-    );
+    return _AvatarPose.bending;
   }
-  return _segmentProgress(
-    vitality,
-    startValue: 60,
-    endValue: 99,
-    startOutput: 0.58,
-    endOutput: 0.97,
-    curve: Curves.easeOutCubic,
-  );
-}
-
-double _segmentProgress(
-  int value, {
-  required int startValue,
-  required int endValue,
-  required double startOutput,
-  required double endOutput,
-  required Curve curve,
-}) {
-  final span = endValue - startValue;
-  if (span <= 0) {
-    return endOutput;
-  }
-  final rawT = ((value - startValue) / span).clamp(0.0, 1.0);
-  final curvedT = curve.transform(rawT);
-  return lerpDouble(startOutput, endOutput, curvedT)!;
+  return _AvatarPose.standingTall;
 }

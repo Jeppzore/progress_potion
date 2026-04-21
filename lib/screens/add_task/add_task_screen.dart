@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
 import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/services/feedback_sound_service.dart';
 
 class AddTaskScreen extends StatefulWidget {
-  const AddTaskScreen({super.key, required this.taskController});
+  const AddTaskScreen({
+    super.key,
+    required this.taskController,
+    this.feedbackSoundPlayer = const NoOpFeedbackSoundPlayer(),
+  });
 
   final TaskController taskController;
+  final FeedbackSoundPlayer feedbackSoundPlayer;
 
   @override
   State<AddTaskScreen> createState() => _AddTaskScreenState();
@@ -50,16 +56,38 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     return left.id.compareTo(right.id);
   }
 
+  bool _isCatalogItemActive(TaskCatalogItem item) {
+    return widget.taskController.activeTasks.any(
+      (task) =>
+          task.title == item.title &&
+          task.category == item.category &&
+          task.description == item.description,
+    );
+  }
+
+  void _playButtonTap() {
+    widget.feedbackSoundPlayer.play(FeedbackSound.buttonTap);
+  }
+
   Future<void> _activateCatalogItem(TaskCatalogItem item) async {
+    final alreadyActive = _isCatalogItemActive(item);
     await widget.taskController.activateCatalogItem(item.id);
     if (!mounted) {
       return;
     }
 
-    Navigator.of(context).pop();
+    widget.feedbackSoundPlayer.play(
+      alreadyActive ? FeedbackSound.buttonTap : FeedbackSound.taskCreate,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(alreadyActive ? 'Already in active.' : 'Added to active.'),
+      ),
+    );
   }
 
   Future<void> _toggleFavorite(TaskCatalogItem item) async {
+    _playButtonTap();
     await widget.taskController.toggleFavorite(item.id);
     if (mounted) {
       setState(() {});
@@ -67,6 +95,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   }
 
   Future<void> _deleteCatalogItem(TaskCatalogItem item) async {
+    _playButtonTap();
     await widget.taskController.deleteUserCatalogItem(item.id);
     if (mounted) {
       setState(() {});
@@ -94,6 +123,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         return;
       }
 
+      widget.feedbackSoundPlayer.play(FeedbackSound.taskCreate);
       setState(() {
         _isCreatingTask = false;
         _titleController.clear();
@@ -140,64 +170,44 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         return Scaffold(
           appBar: AppBar(title: const Text('Task library')),
           body: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Choose a category first',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Browse the task library, keep favorites at the top, and add one to your active list when you are ready.',
-                        style: theme.textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 18),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final category in TaskCategory.values)
-                            ChoiceChip(
-                              label: Text(category.displayName),
-                              selected: _selectedCategory == category,
-                              onSelected: _isSavingNewTask
-                                  ? null
-                                  : (isSelected) {
-                                      if (!isSelected) {
-                                        return;
-                                      }
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final category in TaskCategory.values)
+                    ChoiceChip(
+                      label: Text(category.displayName),
+                      selected: _selectedCategory == category,
+                      onSelected: _isSavingNewTask
+                          ? null
+                          : (isSelected) {
+                              if (!isSelected) {
+                                return;
+                              }
 
-                                      setState(() {
-                                        _selectedCategory = category;
-                                        _isCreatingTask = false;
-                                      });
-                                    },
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                              _playButtonTap();
+                              setState(() {
+                                _selectedCategory = category;
+                                _isCreatingTask = false;
+                              });
+                            },
+                    ),
+                ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               _LibrarySectionHeader(
                 title: _selectedCategory.displayName,
                 subtitle: categoryItems.isEmpty
-                    ? 'No saved tasks yet. Create one or add a starter suggestion.'
+                    ? null
                     : '$favoriteCount favorite${favoriteCount == 1 ? '' : 's'} • $defaultCount starter${defaultCount == 1 ? '' : 's'}',
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               if (categoryItems.isEmpty)
                 _EmptyLibraryCard(
                   onCreatePressed: () {
+                    _playButtonTap();
                     setState(() {
                       _isCreatingTask = true;
                     });
@@ -217,41 +227,35 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                     onFavoriteToggle: _isSavingNewTask
                         ? null
                         : () => _toggleFavorite(item),
-                    onDelete: item.isDefault || _isSavingNewTask
-                        ? null
-                        : () => _deleteCatalogItem(item),
+                      onDelete: item.isDefault || _isSavingNewTask
+                          ? null
+                          : () => _deleteCatalogItem(item),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                 ],
               if (_isCreatingTask) ...[
                 const SizedBox(height: 8),
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(16),
                     child: Form(
                       key: _formKey,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Create a new task',
+                            'New task',
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w900,
                             ),
                           ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'This saves into ${_selectedCategory.displayName} without activating it.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 14),
                           TextFormField(
                             controller: _titleController,
                             autofocus: true,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Task title',
-                              hintText: 'Ship the onboarding copy',
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -260,23 +264,23 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 14),
                           TextFormField(
                             controller: _descriptionController,
                             minLines: 2,
                             maxLines: 4,
                             decoration: const InputDecoration(
                               labelText: 'Description',
-                              hintText: 'Add a quick note for future you.',
                             ),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 16),
                           Row(
                             children: [
                               TextButton(
                                 onPressed: _isSavingNewTask
                                     ? null
                                     : () {
+                                        _playButtonTap();
                                         setState(() {
                                           _isCreatingTask = false;
                                         });
@@ -317,6 +321,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                     onPressed: _isSavingNewTask
                         ? null
                         : () {
+                            _playButtonTap();
                             setState(() {
                               _isCreatingTask = true;
                             });
@@ -337,7 +342,7 @@ class _LibrarySectionHeader extends StatelessWidget {
   const _LibrarySectionHeader({required this.title, required this.subtitle});
 
   final String title;
-  final String subtitle;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -352,8 +357,10 @@ class _LibrarySectionHeader extends StatelessWidget {
             fontWeight: FontWeight.w900,
           ),
         ),
-        const SizedBox(height: 6),
-        Text(subtitle, style: theme.textTheme.bodyMedium),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(subtitle!, style: theme.textTheme.bodyMedium),
+        ],
       ],
     );
   }
@@ -370,7 +377,7 @@ class _EmptyLibraryCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -380,12 +387,7 @@ class _EmptyLibraryCard extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Create the first task in this category or add a starter task to Active.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             FilledButton.icon(
               onPressed: onCreatePressed,
               icon: const Icon(Icons.add),
@@ -425,7 +427,7 @@ class _LibraryTaskCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -442,10 +444,10 @@ class _LibraryTaskCard extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
                           _LibraryTag(
                             label: category.displayName,
@@ -470,7 +472,7 @@ class _LibraryTaskCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Semantics(
                   button: true,
                   label: isFavorite
@@ -488,7 +490,7 @@ class _LibraryTaskCard extends StatelessWidget {
               ],
             ),
             if (description.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 description,
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -496,7 +498,7 @@ class _LibraryTaskCard extends StatelessWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Row(
               children: [
                 if (onDelete != null)
@@ -533,7 +535,7 @@ class _LibraryTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(999),

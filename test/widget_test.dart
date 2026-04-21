@@ -9,6 +9,7 @@ import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/screens/add_task/add_task_screen.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
+import 'package:progress_potion/services/feedback_sound_service.dart';
 import 'package:progress_potion/services/task_service.dart';
 import 'package:progress_potion/widgets/character_avatar.dart';
 import 'package:progress_potion/widgets/potion_progress_card.dart';
@@ -22,10 +23,13 @@ void main() {
     await _pumpApp(tester);
 
     expect(find.text('ProgressPotion'), findsOneWidget);
-    expect(find.text('Brew your next level'), findsOneWidget);
+    expect(find.text('Brew in progress'), findsOneWidget);
     expect(find.text('Potionkeeper'), findsNothing);
     expect(find.text('1 of 3 charges'), findsOneWidget);
     expect(find.text('Drink Potion'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Add Task'), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
 
     await _scrollToText(tester, 'Active Tasks');
     expect(find.text('Active Tasks'), findsOneWidget);
@@ -43,12 +47,39 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Potionkeeper'), findsOneWidget);
-      expect(find.text('Brew your next level'), findsNothing);
+      expect(find.text('Brew in progress'), findsNothing);
 
       await _scrollToText(tester, 'Active Tasks');
       expect(find.text('Active Tasks'), findsOneWidget);
     },
   );
+
+  testWidgets('bottom navigation preserves the active screen state', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester);
+
+    await tester.drag(
+      find.byKey(const ValueKey('hero-page-view')),
+      const Offset(-400, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Potionkeeper'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-library-action')), findsOneWidget);
+
+    await tester.tap(find.text('Completed'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Brew morning focus'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-library-action')), findsNothing);
+
+    await tester.tap(find.text('Active'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Potionkeeper'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-library-action')), findsOneWidget);
+  });
 
   testWidgets('hero page toggles update their selected styling', (
     WidgetTester tester,
@@ -143,11 +174,13 @@ void main() {
     WidgetTester tester,
   ) async {
     var drinkCount = 0;
+    final feedbackSoundPlayer = _RecordingFeedbackSoundPlayer();
 
     await _pumpPotionCard(
       tester,
       potionChargeCount: 1,
       currentPotionCategories: const [TaskCategory.fitness],
+      feedbackSoundPlayer: feedbackSoundPlayer,
       onDrinkPotion: () {
         drinkCount += 1;
       },
@@ -162,6 +195,7 @@ void main() {
     await tester.pump();
 
     expect(drinkCount, 0);
+    expect(feedbackSoundPlayer.playedSounds, [FeedbackSound.potionFlask]);
     expect(
       find.byKey(const ValueKey('potion-bottle-jiggle-1')),
       findsOneWidget,
@@ -348,52 +382,58 @@ void main() {
     },
   );
 
-  testWidgets(
-    'vitality posture rises to standing at 100 and plateaus after that',
-    (WidgetTester tester) async {
-      Future<Rect> torsoRectForVitality(int vitality) async {
-        await tester.pumpWidget(
-          MediaQuery(
-            data: const MediaQueryData(disableAnimations: true),
-            child: MaterialApp(
-              home: Scaffold(
-                body: Center(
-                  child: CharacterAvatar(
-                    stats: CharacterStats(
-                      strength: 0,
-                      vitality: vitality,
-                      wisdom: 0,
-                      mindfulness: 0,
-                    ),
-                    celebrationCount: 0,
+  testWidgets('vitality selects resting, bending, and standing poses', (
+    WidgetTester tester,
+  ) async {
+    Future<Rect> torsoRectForVitality(int vitality) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: CharacterAvatar(
+                  stats: CharacterStats(
+                    strength: 0,
+                    vitality: vitality,
+                    wisdom: 0,
+                    mindfulness: 0,
                   ),
+                  celebrationCount: 0,
                 ),
               ),
             ),
           ),
-        );
-        await tester.pumpAndSettle();
-        return tester.getRect(find.byKey(const ValueKey('avatar-torso')));
-      }
-
-      final seatedTorso = await torsoRectForVitality(0);
-      expect(find.byKey(const ValueKey('avatar-seat')), findsOneWidget);
-
-      final standingTorso = await torsoRectForVitality(100);
-      expect(find.byKey(const ValueKey('avatar-seat')), findsNothing);
-
-      final plateauTorso = await torsoRectForVitality(1000);
-
-      expect(standingTorso.top, lessThan(seatedTorso.top));
-      expect((standingTorso.top - plateauTorso.top).abs(), lessThan(0.01));
-      expect(
-        (standingTorso.height - plateauTorso.height).abs(),
-        lessThan(0.01),
+        ),
       );
-    },
-  );
+      await tester.pumpAndSettle();
+      return tester.getRect(find.byKey(const ValueKey('avatar-torso')));
+    }
 
-  testWidgets('character tap triggers sparkle feedback', (
+    final restingTorso = await torsoRectForVitality(0);
+    expect(find.byKey(const ValueKey('avatar-pose-resting')), findsOneWidget);
+    expect(find.byKey(const ValueKey('avatar-seat')), findsOneWidget);
+
+    final bendingTorso = await torsoRectForVitality(40);
+    expect(find.byKey(const ValueKey('avatar-pose-bending')), findsOneWidget);
+    expect(find.byKey(const ValueKey('avatar-seat')), findsNothing);
+
+    final standingTorso = await torsoRectForVitality(60);
+    expect(
+      find.byKey(const ValueKey('avatar-pose-standing-tall')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('avatar-seat')), findsNothing);
+
+    final plateauTorso = await torsoRectForVitality(1000);
+
+    expect(bendingTorso.top, lessThan(restingTorso.top));
+    expect(standingTorso.top, lessThan(bendingTorso.top));
+    expect((standingTorso.top - plateauTorso.top).abs(), lessThan(0.01));
+    expect((standingTorso.height - plateauTorso.height).abs(), lessThan(0.01));
+  });
+
+  testWidgets('character tap triggers the bending balance reaction', (
     WidgetTester tester,
   ) async {
     var tapCount = 0;
@@ -407,16 +447,62 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 32));
 
-    expect(find.byKey(const ValueKey('avatar-sparkle-0')), findsNothing);
+    expect(find.byKey(const ValueKey('avatar-bending-reaction')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(tapCount, 1);
-    expect(find.byKey(const ValueKey('avatar-sparkle-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('avatar-sparkle-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('avatar-sparkle-2')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('avatar-bending-reaction')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('avatar-sparkle-0')), findsNothing);
+  });
+
+  testWidgets('resting and standing poses use distinct tap reactions', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const _CharacterAvatarHarness(
+        stats: CharacterStats(
+          strength: 2,
+          vitality: 0,
+          wisdom: 4,
+          mindfulness: 5,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 32));
+    await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+      find.byKey(const ValueKey('avatar-resting-reaction')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(
+      const _CharacterAvatarHarness(
+        stats: CharacterStats(
+          strength: 2,
+          vitality: 60,
+          wisdom: 4,
+          mindfulness: 5,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 32));
+    await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+      find.byKey(const ValueKey('avatar-standing-tall-reaction')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -443,6 +529,10 @@ void main() {
         find.byKey(const ValueKey('avatar-reduced-motion-pulse')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('avatar-bending-reaction')),
+        findsNothing,
+      );
       expect(find.byKey(const ValueKey('avatar-sparkle-0')), findsNothing);
       expect(find.byKey(const ValueKey('avatar-sparkle-1')), findsNothing);
       expect(find.byKey(const ValueKey('avatar-sparkle-2')), findsNothing);
@@ -466,8 +556,8 @@ void main() {
 
     final data = semantics.getSemanticsData();
 
-    expect(data.label, 'Potionkeeper companion');
-    expect(data.hint, 'Tap to encourage your companion');
+    expect(data.label, 'Potionkeeper companion, finding balance');
+    expect(data.hint, 'Tap for a balancing wobble');
     expect(data.hasAction(ui.SemanticsAction.tap), isTrue);
     expect(data.flagsCollection.isButton, isTrue);
     semanticsHandle.dispose();
@@ -476,7 +566,9 @@ void main() {
   testWidgets(
     'character page wires avatar tap feedback through the hero view',
     (WidgetTester tester) async {
-      await _pumpApp(tester);
+      final feedbackSoundPlayer = _RecordingFeedbackSoundPlayer();
+
+      await _pumpApp(tester, feedbackSoundPlayer: feedbackSoundPlayer);
 
       await tester.ensureVisible(find.text('Character'));
       await tester.pumpAndSettle();
@@ -489,13 +581,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Tap for a wave'), findsOneWidget);
+      expect(find.text('Tap for a reaction'), findsOneWidget);
       expect(find.byKey(const ValueKey('avatar-tap-target')), findsOneWidget);
 
+      feedbackSoundPlayer.playedSounds.clear();
       await tester.tap(find.byKey(const ValueKey('avatar-tap-target')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 1));
 
+      expect(feedbackSoundPlayer.playedSounds, [
+        FeedbackSound.characterInteract,
+      ]);
       expect(
         find.byKey(const ValueKey('avatar-reduced-motion-pulse')),
         findsOneWidget,
@@ -505,7 +601,7 @@ void main() {
   );
 
   testWidgets(
-    'shows a category-first task library, sorts favorites first, and keeps new tasks in the library',
+    'shows a compact task library, sorts favorites first, and keeps new tasks in the library',
     (WidgetTester tester) async {
       final controller = _FakeLibraryTaskController();
 
@@ -517,7 +613,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Choose a category first'), findsOneWidget);
+      expect(find.text('Task library'), findsOneWidget);
       expect(find.widgetWithText(ChoiceChip, 'Fitness'), findsOneWidget);
       expect(find.widgetWithText(ChoiceChip, 'Study'), findsOneWidget);
 
@@ -562,6 +658,56 @@ void main() {
       expect(controller.activatedTaskId, isNull);
       expect(find.text('Write release summary'), findsOneWidget);
       expect(find.text('Add to active'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'adding a library task keeps the screen open and updates the active list',
+    (WidgetTester tester) async {
+      final feedbackSoundPlayer = _RecordingFeedbackSoundPlayer();
+
+      await _pumpApp(tester, feedbackSoundPlayer: feedbackSoundPlayer);
+
+      await tester.tap(find.byKey(const ValueKey('task-library-action')));
+      await tester.pumpAndSettle();
+      expect(feedbackSoundPlayer.playedSounds, [FeedbackSound.buttonTap]);
+
+      await tester.tap(find.text('Create new task'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Task title'),
+        'Plan weekly review',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Description'),
+        'Keep the session short.',
+      );
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Save to library'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save to library'));
+      await tester.pumpAndSettle();
+      expect(feedbackSoundPlayer.playedSounds.last, FeedbackSound.taskCreate);
+
+      final addToActiveButton = find
+          .widgetWithText(FilledButton, 'Add to active')
+          .first;
+      await tester.ensureVisible(addToActiveButton);
+      await tester.pumpAndSettle();
+      await tester.tap(addToActiveButton);
+      await tester.pump();
+      expect(feedbackSoundPlayer.playedSounds.last, FeedbackSound.taskCreate);
+
+      expect(find.text('Task library'), findsOneWidget);
+      expect(find.text('Plan weekly review'), findsOneWidget);
+
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _scrollToText(tester, 'Active Tasks');
+
+      expect(find.text('Plan weekly review'), findsOneWidget);
     },
   );
 
@@ -649,32 +795,41 @@ void main() {
   testWidgets(
     'completing tasks fills the potion without awarding XP immediately',
     (WidgetTester tester) async {
-      await _pumpApp(tester);
+      final feedbackSoundPlayer = _RecordingFeedbackSoundPlayer();
+
+      await _pumpApp(tester, feedbackSoundPlayer: feedbackSoundPlayer);
 
       final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
       expect(homeScreen.taskController.totalXp, 0);
 
       await _completeVisibleTask(tester);
 
+      expect(feedbackSoundPlayer.playedSounds, [FeedbackSound.taskComplete]);
       expect(homeScreen.taskController.completedCount, 2);
       expect(homeScreen.taskController.potionChargeCount, 2);
       expect(homeScreen.taskController.totalXp, 0);
       expect(homeScreen.taskController.stats.strength, 0);
-      expect(find.text('Done'), findsNWidgets(2));
-      expect(find.text('Reward stored in the potion'), findsNWidgets(2));
       expect(
         homeScreen.taskController.completedTasks.any(
           (task) => task.title == 'Refill water flask',
         ),
         isTrue,
       );
+
+      await tester.tap(find.text('Completed'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Done'), findsNWidgets(2));
+      expect(find.text('Refill water flask'), findsOneWidget);
     },
   );
 
   testWidgets('tapping a full potion bottle drinks it and updates the hero', (
     WidgetTester tester,
   ) async {
-    await _pumpApp(tester);
+    final feedbackSoundPlayer = _RecordingFeedbackSoundPlayer();
+
+    await _pumpApp(tester, feedbackSoundPlayer: feedbackSoundPlayer);
 
     final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
 
@@ -685,9 +840,11 @@ void main() {
     expect(homeScreen.taskController.totalXp, 0);
 
     await _scrollToTopView(tester);
+    feedbackSoundPlayer.playedSounds.clear();
     await tester.tap(find.byKey(const ValueKey('potion-bottle-tap-target')));
     await tester.pumpAndSettle();
 
+    expect(feedbackSoundPlayer.playedSounds.first, FeedbackSound.potionDrink);
     expect(find.text('Rewards Collected'), findsOneWidget);
     expect(homeScreen.taskController.totalXp, 45);
     expect(homeScreen.taskController.stats.strength, 1);
@@ -760,14 +917,30 @@ void main() {
     expect(homeScreen.taskController.activeTasks, isEmpty);
     expect(homeScreen.taskController.potionChargeCount, 3);
     expect(homeScreen.taskController.totalXp, 0);
+    expect(find.text('No active tasks'), findsOneWidget);
+
+    await tester.tap(find.text('Completed'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Completed'), findsWidgets);
+    expect(find.text('Refill water flask'), findsOneWidget);
+    expect(find.text('Ship one tiny step'), findsOneWidget);
   });
 }
 
-Future<void> _pumpApp(WidgetTester tester, {TaskService? taskService}) async {
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  TaskService? taskService,
+  FeedbackSoundPlayer? feedbackSoundPlayer,
+}) async {
   await tester.pumpWidget(
     MediaQuery(
       data: const MediaQueryData(disableAnimations: true),
-      child: ProgressPotionApp(taskService: taskService),
+      child: ProgressPotionApp(
+        taskService: taskService,
+        feedbackSoundPlayer:
+            feedbackSoundPlayer ?? const NoOpFeedbackSoundPlayer(),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -780,6 +953,7 @@ Future<void> _pumpPotionCard(
   List<TaskCategory> currentPotionCategories = const [TaskCategory.fitness],
   bool canDrinkPotion = false,
   CharacterStats stats = CharacterStats.zero,
+  FeedbackSoundPlayer feedbackSoundPlayer = const NoOpFeedbackSoundPlayer(),
   VoidCallback? onDrinkPotion,
 }) async {
   await tester.pumpWidget(
@@ -803,6 +977,7 @@ Future<void> _pumpPotionCard(
                 canDrinkPotion: canDrinkPotion,
                 isDrinkingPotion: false,
                 celebrationCount: 0,
+                feedbackSoundPlayer: feedbackSoundPlayer,
                 onDrinkPotion: onDrinkPotion ?? () {},
               ),
             ],
@@ -812,6 +987,27 @@ Future<void> _pumpPotionCard(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+class _RecordingFeedbackSoundPlayer implements FeedbackSoundPlayer {
+  final List<FeedbackSound> playedSounds = <FeedbackSound>[];
+  var preloadCount = 0;
+  var disposed = false;
+
+  @override
+  Future<void> preload() async {
+    preloadCount += 1;
+  }
+
+  @override
+  void play(FeedbackSound sound) {
+    playedSounds.add(sound);
+  }
+
+  @override
+  void dispose() {
+    disposed = true;
+  }
 }
 
 Future<void> _completeVisibleTask(WidgetTester tester) async {
@@ -1001,10 +1197,17 @@ class _FailingLibraryTaskController extends _FakeLibraryTaskController {
 class _CharacterAvatarHarness extends StatefulWidget {
   const _CharacterAvatarHarness({
     this.disableAnimations = false,
+    this.stats = const CharacterStats(
+      strength: 2,
+      vitality: 45,
+      wisdom: 4,
+      mindfulness: 5,
+    ),
     this.onAvatarTap,
   });
 
   final bool disableAnimations;
+  final CharacterStats stats;
   final VoidCallback? onAvatarTap;
 
   @override
@@ -1030,12 +1233,7 @@ class _CharacterAvatarHarnessState extends State<_CharacterAvatarHarness> {
         home: Scaffold(
           body: Center(
             child: CharacterAvatar(
-              stats: const CharacterStats(
-                strength: 2,
-                vitality: 45,
-                wisdom: 4,
-                mindfulness: 5,
-              ),
+              stats: widget.stats,
               celebrationCount: 0,
               interactionCount: _interactionCount,
               onTap: _handleTap,

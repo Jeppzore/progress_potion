@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
 import 'package:progress_potion/models/character_stats.dart';
+import 'package:progress_potion/services/feedback_sound_service.dart';
 
 class PotionRewardDialog extends StatelessWidget {
   const PotionRewardDialog({
     super.key,
     required this.reward,
     required this.totalXp,
+    this.feedbackSoundPlayer = const NoOpFeedbackSoundPlayer(),
   });
 
   final PotionRewardResult reward;
   final int totalXp;
+  final FeedbackSoundPlayer feedbackSoundPlayer;
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +137,10 @@ class PotionRewardDialog extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    feedbackSoundPlayer.play(FeedbackSound.buttonTap);
+                    Navigator.of(context).pop();
+                  },
                   child: const Text('Continue'),
                 ),
               ),

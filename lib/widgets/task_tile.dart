@@ -31,25 +31,25 @@ class TaskTile extends StatelessWidget {
       color: cardColor,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color: theme.colorScheme.primary.withValues(alpha: 0.06),
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 6,
-                height: task.description.isEmpty ? 64 : 88,
+                height: task.description.isEmpty ? 60 : 80,
                 decoration: BoxDecoration(
                   color: sideAccent,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,8 +73,8 @@ class TaskTile extends StatelessWidget {
                         const SizedBox(width: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
+                            horizontal: 10,
+                            vertical: 6,
                           ),
                           decoration: BoxDecoration(
                             color: badgeColor,
@@ -89,45 +89,29 @@ class TaskTile extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Semantics(
-                          label: 'Category ${task.category.displayName}',
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              task.category.displayName,
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
+                    const SizedBox(height: 6),
+                    Semantics(
+                      label: 'Category ${task.category.displayName}',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
-                        Text(
-                          task.isCompleted
-                              ? 'Reward stored in the potion'
-                              : 'Completing adds one potion charge',
-                          style: theme.textTheme.bodySmall?.copyWith(
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          task.category.displayName,
+                          style: theme.textTheme.labelLarge?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ],
+                      ),
                     ),
                     if (task.description.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
                         task.description,
                         style: theme.textTheme.bodyMedium?.copyWith(
@@ -139,7 +123,7 @@ class TaskTile extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     Align(
                       alignment: Alignment.centerRight,
                       child: task.isCompleted
@@ -148,9 +132,10 @@ class TaskTile extends StatelessWidget {
                               children: [
                                 Icon(
                                   Icons.check_circle,
+                                  size: 20,
                                   color: theme.colorScheme.tertiary,
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 6),
                                 Text(
                                   'Done',
                                   style: theme.textTheme.labelLarge?.copyWith(
@@ -160,8 +145,8 @@ class TaskTile extends StatelessWidget {
                               ],
                             )
                           : Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
+                              spacing: 8,
+                              runSpacing: 8,
                               alignment: WrapAlignment.end,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
@@ -269,7 +254,7 @@ class _CompleteTaskButtonState extends State<_CompleteTaskButton> {
             animationDuration: duration,
             elevation: const WidgetStatePropertyAll(0),
             padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             ),
             textStyle: WidgetStatePropertyAll(
               theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),

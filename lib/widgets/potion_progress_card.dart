@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/services/feedback_sound_service.dart';
 import 'package:progress_potion/widgets/character_avatar.dart';
 
 class PotionProgressCard extends StatefulWidget {
@@ -22,6 +23,7 @@ class PotionProgressCard extends StatefulWidget {
     required this.isDrinkingPotion,
     required this.celebrationCount,
     required this.onDrinkPotion,
+    this.feedbackSoundPlayer = const NoOpFeedbackSoundPlayer(),
   });
 
   final int xp;
@@ -37,6 +39,7 @@ class PotionProgressCard extends StatefulWidget {
   final bool isDrinkingPotion;
   final int celebrationCount;
   final VoidCallback onDrinkPotion;
+  final FeedbackSoundPlayer feedbackSoundPlayer;
 
   @override
   State<PotionProgressCard> createState() => _PotionProgressCardState();
@@ -65,6 +68,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
       return;
     }
 
+    widget.feedbackSoundPlayer.play(FeedbackSound.buttonTap);
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 280),
@@ -82,6 +86,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
       return;
     }
 
+    widget.feedbackSoundPlayer.play(FeedbackSound.potionFlask);
     setState(() {
       _bottleJiggleCount += 1;
     });
@@ -102,15 +107,15 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
 
   double _heroHeightForWidth(double maxWidth) {
     if (maxWidth >= 900) {
-      return 640;
+      return 540;
     }
     if (maxWidth >= 720) {
-      return 660;
+      return 560;
     }
     if (maxWidth >= 520) {
-      return 700;
+      return 600;
     }
-    return 740;
+    return 630;
   }
 
   @override
@@ -127,7 +132,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
           'Hero section. ${_currentPageIndex == 0 ? 'Potion view' : 'Character view'}. Potion has $spokenChargeCount of ${widget.potionCapacity} charges. Total XP ${widget.xp}. Strength ${widget.stats.strength}. Vitality ${widget.stats.vitality}. Wisdom ${widget.stats.wisdom}. Mindfulness ${widget.stats.mindfulness}.',
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(36),
+          borderRadius: BorderRadius.circular(32),
           gradient: LinearGradient(
             colors: [
               theme.colorScheme.surface,
@@ -146,7 +151,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(36),
+          borderRadius: BorderRadius.circular(32),
           child: Stack(
             children: [
               Positioned(
@@ -166,7 +171,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final potionPane = _PotionPane(
@@ -189,6 +194,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
                       xp: widget.xp,
                       stats: widget.stats,
                       celebrationCount: widget.celebrationCount,
+                      feedbackSoundPlayer: widget.feedbackSoundPlayer,
                     );
                     final fallbackHeroHeight = _heroHeightForWidth(
                       constraints.maxWidth,
@@ -234,11 +240,11 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         Center(
                           child: Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
+                            spacing: 8,
+                            runSpacing: 8,
                             alignment: WrapAlignment.center,
                             children: [
                               _HeroPageToggle(
@@ -374,7 +380,7 @@ class _HeroPageToggle extends StatelessWidget {
           key: ValueKey('hero-page-toggle-pill-$label'),
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
             color: isSelected
                 ? theme.colorScheme.primary.withValues(alpha: 0.14)
@@ -455,19 +461,14 @@ class _PotionPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final categoryLabel = varietyCategoryCount == 1 ? 'category' : 'categories';
-    final headline = canDrinkPotion
-        ? 'Potion is ready to drink'
-        : 'Brew your next level';
-    final subtitle = canDrinkPotion
-        ? 'Claim this potion to bank XP and convert the stored categories into permanent stats.'
-        : 'Complete tasks to build a full potion. Stats only increase when you drink a finished brew.';
+    final headline = canDrinkPotion ? 'Potion ready' : 'Brew in progress';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 8,
+          runSpacing: 8,
           children: [
             _Pill(
               icon: Icons.auto_awesome_rounded,
@@ -481,7 +482,7 @@ class _PotionPane extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         Text(
           headline,
           style: theme.textTheme.headlineMedium?.copyWith(
@@ -489,12 +490,10 @@ class _PotionPane extends StatelessWidget {
             height: 1.05,
           ),
         ),
-        const SizedBox(height: 10),
-        Text(subtitle, style: theme.textTheme.bodyLarge),
-        const SizedBox(height: 22),
+        const SizedBox(height: 16),
         Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280, maxHeight: 300),
+            constraints: const BoxConstraints(maxWidth: 236, maxHeight: 252),
             child: _PotionBottle(
               progress: progress,
               isFull: canDrinkPotion,
@@ -505,10 +504,10 @@ class _PotionPane extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.58),
             borderRadius: BorderRadius.circular(24),
@@ -523,7 +522,7 @@ class _PotionPane extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      canDrinkPotion ? 'Reward preview' : 'Current brew',
+                      canDrinkPotion ? 'Reward' : 'Brew',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
@@ -540,19 +539,19 @@ class _PotionPane extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Variety bonus: +$varietyBonusXp XP from $varietyCategoryCount $categoryLabel',
+                '+$varietyBonusXp variety from $varietyCategoryCount $categoryLabel',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: 6,
+                runSpacing: 6,
                 children: currentPotionCategories.isEmpty
                     ? [
                         _CategoryChip(
-                          label: 'No essence stored yet',
+                          label: 'No charges yet',
                           color: theme.colorScheme.surfaceContainerHighest,
                           textColor: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -566,7 +565,7 @@ class _PotionPane extends StatelessWidget {
                           ),
                       ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               if (canDrinkPotion)
                 FilledButton.icon(
                   onPressed: isDrinkingPotion ? null : onDrinkPotion,
@@ -578,17 +577,9 @@ class _PotionPane extends StatelessWidget {
                     backgroundColor: theme.colorScheme.primary,
                     foregroundColor: theme.colorScheme.onPrimary,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
+                      horizontal: 18,
+                      vertical: 14,
                     ),
-                  ),
-                )
-              else
-                Text(
-                  'Keep stacking categories to reach the next drinkable potion.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
             ],
@@ -604,11 +595,13 @@ class _CompanionPane extends StatefulWidget {
     required this.xp,
     required this.stats,
     required this.celebrationCount,
+    required this.feedbackSoundPlayer,
   });
 
   final int xp;
   final CharacterStats stats;
   final int celebrationCount;
+  final FeedbackSoundPlayer feedbackSoundPlayer;
 
   @override
   State<_CompanionPane> createState() => _CompanionPaneState();
@@ -618,6 +611,7 @@ class _CompanionPaneState extends State<_CompanionPane> {
   int _characterInteractionCount = 0;
 
   void _handleCharacterTap() {
+    widget.feedbackSoundPlayer.play(FeedbackSound.characterInteract);
     setState(() {
       _characterInteractionCount += 1;
     });
@@ -715,7 +709,7 @@ class _CompanionPaneState extends State<_CompanionPane> {
                       ),
                     ),
                     Text(
-                      'Tap for a wave',
+                      'Tap for a reaction',
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: theme.colorScheme.onSurfaceVariant,
@@ -860,16 +854,13 @@ class _CompanionPaneState extends State<_CompanionPane> {
 }
 
 String _companionHeadline(int vitality) {
-  if (vitality >= 100) {
-    return 'Standing tall';
-  }
   if (vitality >= 60) {
-    return 'Almost upright';
+    return 'Standing tall';
   }
   if (vitality >= 25) {
     return 'Finding balance';
   }
-  return 'Starting seated';
+  return 'Resting up';
 }
 
 String _companionBody(CharacterStats stats) {
@@ -881,16 +872,13 @@ String _companionBody(CharacterStats stats) {
       ? 'Your companion is just beginning the climb.'
       : 'Every full potion leaves a visible trace in their stance and expression.';
 
-  if (stats.vitality >= 100) {
-    return '$presence Vitality has reached the standing milestone, so new gains now read as polish rather than a bigger pose change.';
-  }
   if (stats.vitality >= 60) {
-    return '$presence The posture is nearly upright now, with longer lines and a calmer gaze.';
+    return '$presence The companion now stands tall with longer lines and a proud, steady stance.';
   }
   if (stats.vitality >= 25) {
-    return '$presence The shoulders are lifting and the seated slump is starting to fade.';
+    return '$presence The companion is bent forward in motion, balancing between rest and a full upright pose.';
   }
-  return '$presence Early gains stay subtle so the bigger posture payoff still feels earned.';
+  return '$presence Early gains keep the companion low and resting so the bigger posture payoff still feels earned.';
 }
 
 class _StatCard extends StatelessWidget {
@@ -996,7 +984,7 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(999),
@@ -1023,7 +1011,7 @@ class _Pill extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface.withValues(alpha: 0.74),
         borderRadius: BorderRadius.circular(999),
