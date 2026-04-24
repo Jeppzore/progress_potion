@@ -45,6 +45,18 @@ class _HomeScreenState extends State<HomeScreen> {
     ).showSnackBar(const SnackBar(content: Text('Saved to favorites.')));
   }
 
+  Future<void> _markTaskAsStarter(Task task) async {
+    widget.feedbackSoundPlayer.play(FeedbackSound.buttonTap);
+    await widget.taskController.markTaskAsStarter(task.id);
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Saved as a starter task.')));
+  }
+
   Future<void> _completeTask(Task task) async {
     if (_completingTaskIds.contains(task.id)) {
       return;
@@ -225,6 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         isFavorite: widget.taskController.isTaskFavorite(
                           task.id,
                         ),
+                        isStarter: widget.taskController.isTaskStarter(task.id),
                         isCompleting: _completingTaskIds.contains(task.id),
                         onComplete: _completingTaskIds.contains(task.id)
                             ? null
@@ -235,6 +248,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         onFavorite: _completingTaskIds.contains(task.id)
                             ? null
                             : () => _markTaskAsFavorite(task),
+                        onStarter: _completingTaskIds.contains(task.id)
+                            ? null
+                            : () => _markTaskAsStarter(task),
                       ),
                       const SizedBox(height: 10),
                     ],
@@ -259,7 +275,10 @@ class _SectionHeader extends StatelessWidget {
       title,
       style: Theme.of(
         context,
-      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+      ).textTheme.headlineSmall?.copyWith(
+        fontSize: 24,
+        fontWeight: FontWeight.w900,
+      ),
     );
   }
 }

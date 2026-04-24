@@ -114,6 +114,15 @@ class TaskController extends ChangeNotifier {
     return false;
   }
 
+  bool isTaskStarter(String taskId) {
+    for (final task in _tasks) {
+      if (task.id == taskId) {
+        return _findCatalogItemForTask(task)?.isStarter ?? false;
+      }
+    }
+    return false;
+  }
+
   Future<void> addTask({
     required String title,
     required TaskCategory category,
@@ -193,6 +202,24 @@ class TaskController extends ChangeNotifier {
     await _saveAndApplyState(_buildState(catalogItems: nextCatalogItems));
   }
 
+  Future<void> toggleStarter(String catalogItemId) async {
+    final currentIndex = _catalogItems.indexWhere(
+      (item) => item.id == catalogItemId,
+    );
+    if (currentIndex == -1) {
+      return;
+    }
+
+    final currentItem = _catalogItems[currentIndex];
+    final updatedItem = currentItem.copyWith(isStarter: !currentItem.isStarter);
+    final nextCatalogItems = [
+      for (final item in _catalogItems)
+        if (item.id == catalogItemId) updatedItem else item,
+    ];
+
+    await _saveAndApplyState(_buildState(catalogItems: nextCatalogItems));
+  }
+
   Future<void> markTaskAsFavorite(String taskId) async {
     final currentIndex = _tasks.indexWhere((task) => task.id == taskId);
     if (currentIndex == -1 || _tasks[currentIndex].isCompleted) {
@@ -220,6 +247,38 @@ class TaskController extends ChangeNotifier {
     final nextCatalogItems = [
       for (final item in _catalogItems)
         if (item.id == existing.id) item.copyWith(isFavorite: true) else item,
+    ];
+
+    await _saveAndApplyState(_buildState(catalogItems: nextCatalogItems));
+  }
+
+  Future<void> markTaskAsStarter(String taskId) async {
+    final currentIndex = _tasks.indexWhere((task) => task.id == taskId);
+    if (currentIndex == -1 || _tasks[currentIndex].isCompleted) {
+      return;
+    }
+
+    final task = _tasks[currentIndex];
+    final existing = _findCatalogItemForTask(task);
+    if (existing == null) {
+      final catalogItem = _buildCatalogItem(
+        title: task.title,
+        category: task.category,
+        description: task.description,
+      ).copyWith(isStarter: true);
+      await _saveAndApplyState(
+        _buildState(catalogItems: [catalogItem, ..._catalogItems]),
+      );
+      return;
+    }
+
+    if (existing.isStarter) {
+      return;
+    }
+
+    final nextCatalogItems = [
+      for (final item in _catalogItems)
+        if (item.id == existing.id) item.copyWith(isStarter: true) else item,
     ];
 
     await _saveAndApplyState(_buildState(catalogItems: nextCatalogItems));
@@ -293,8 +352,17 @@ class TaskController extends ChangeNotifier {
     _completingTaskIds.add(id);
 
     try {
-      final updatedTask = _tasks[currentIndex].copyWith(isCompleted: true);
+      final task = _tasks[currentIndex];
+      final matchingCatalogItem = _findCatalogItemForTask(task);
+      final updatedTask = task.copyWith(isCompleted: true);
+      final respawnedTask = switch (matchingCatalogItem) {
+        TaskCatalogItem(isStarter: true) => _buildActiveTaskFromCatalog(
+          matchingCatalogItem,
+        ),
+        _ => null,
+      };
       final nextTasks = [
+        ?respawnedTask,
         for (final task in _tasks)
           if (task.id == id) updatedTask else task,
       ];

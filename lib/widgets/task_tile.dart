@@ -6,18 +6,22 @@ class TaskTile extends StatelessWidget {
     super.key,
     required this.task,
     this.isFavorite = false,
+    this.isStarter = false,
     this.isCompleting = false,
     this.onComplete,
     this.onRemove,
     this.onFavorite,
+    this.onStarter,
   });
 
   final Task task;
   final bool isFavorite;
+  final bool isStarter;
   final bool isCompleting;
   final VoidCallback? onComplete;
   final VoidCallback? onRemove;
   final VoidCallback? onFavorite;
+  final VoidCallback? onStarter;
 
   @override
   Widget build(BuildContext context) {
@@ -95,8 +99,10 @@ class TaskTile extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 task.title,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontSize: 20,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w900,
                                   color: effectiveIsCompleted
                                       ? theme.colorScheme.onSurface.withValues(
                                           alpha: isCompleting ? 0.88 : 0.74,
@@ -125,31 +131,33 @@ class TaskTile extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 6),
-                        Semantics(
-                          label: 'Category ${task.category.displayName}',
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              task.category.displayName,
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            Semantics(
+                              label: 'Category ${task.category.displayName}',
+                              child: _TaskSurfaceTag(
+                                label: task.category.displayName,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                textColor: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
-                          ),
+                            if (isStarter)
+                              _TaskSurfaceTag(
+                                label: 'Starter',
+                                color: theme.colorScheme.primaryContainer,
+                                textColor: theme.colorScheme.onPrimaryContainer,
+                              ),
+                          ],
                         ),
                         if (task.description.isNotEmpty) ...[
                           const SizedBox(height: 6),
                           Text(
                             task.description,
-                            style: theme.textTheme.bodyMedium?.copyWith(
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontSize: 15.5,
                               color: effectiveIsCompleted
                                   ? theme.colorScheme.onSurface.withValues(
                                       alpha: 0.7,
@@ -223,6 +231,20 @@ class TaskTile extends StatelessWidget {
                                         ),
                                         label: const Text('+ Favorite'),
                                       ),
+                                    if (isStarter)
+                                      _TaskInlineStatus(
+                                        icon: Icons.restart_alt_rounded,
+                                        label: 'Starter',
+                                        color: theme.colorScheme.primary,
+                                      )
+                                    else if (onStarter != null)
+                                      TextButton.icon(
+                                        onPressed: onStarter,
+                                        icon: const Icon(
+                                          Icons.restart_alt_rounded,
+                                        ),
+                                        label: const Text('+ Starter'),
+                                      ),
                                     _CompleteTaskButton(
                                       onPressed: onComplete,
                                       disableAnimations: disableAnimations,
@@ -239,6 +261,66 @@ class TaskTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _TaskSurfaceTag extends StatelessWidget {
+  const _TaskSurfaceTag({
+    required this.label,
+    required this.color,
+    required this.textColor,
+  });
+
+  final String label;
+  final Color color;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: textColor,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskInlineStatus extends StatelessWidget {
+  const _TaskInlineStatus({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }

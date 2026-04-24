@@ -31,6 +31,7 @@ const List<TaskCatalogItem> defaultSeedCatalogItems = [
     title: 'Brew morning focus',
     category: TaskCategory.work,
     description: 'Choose the one win that matters most before opening chat.',
+    isStarter: true,
     isDefault: true,
     sortOrder: 0,
     completedCount: 1,
@@ -41,6 +42,7 @@ const List<TaskCatalogItem> defaultSeedCatalogItems = [
     category: TaskCategory.fitness,
     description:
         'Set yourself up for the next work block with one small reset.',
+    isStarter: true,
     isDefault: true,
     sortOrder: 1,
   ),
@@ -50,6 +52,7 @@ const List<TaskCatalogItem> defaultSeedCatalogItems = [
     category: TaskCategory.hobby,
     description:
         'Finish something concrete, even if it only takes ten minutes.',
+    isStarter: true,
     isDefault: true,
     sortOrder: 2,
   ),
@@ -74,7 +77,7 @@ class TaskSessionState {
          potionChargeCategories,
        );
 
-  static const int schemaVersion = 4;
+  static const int schemaVersion = 5;
 
   final List<Task> tasks;
   final List<TaskCatalogItem> catalogItems;
@@ -123,6 +126,7 @@ class TaskSessionState {
     if (schemaVersionValue != 1 &&
         schemaVersionValue != 2 &&
         schemaVersionValue != 3 &&
+        schemaVersionValue != 4 &&
         schemaVersionValue != schemaVersion) {
       throw FormatException(
         'Unsupported task session schema version: $schemaVersionValue',

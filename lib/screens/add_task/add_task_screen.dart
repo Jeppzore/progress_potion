@@ -94,6 +94,14 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     }
   }
 
+  Future<void> _toggleStarter(TaskCatalogItem item) async {
+    _playButtonTap();
+    await widget.taskController.toggleStarter(item.id);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   Future<void> _deleteCatalogItem(TaskCatalogItem item) async {
     _playButtonTap();
     await widget.taskController.deleteUserCatalogItem(item.id);
@@ -160,12 +168,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       animation: widget.taskController,
       builder: (context, _) {
         final categoryItems = _catalogItemsFor(_selectedCategory);
-        final favoriteCount = categoryItems
-            .where((item) => item.isFavorite)
-            .length;
-        final defaultCount = categoryItems
-            .where((item) => item.isDefault)
-            .length;
 
         return Scaffold(
           appBar: AppBar(title: const Text('Task library')),
@@ -173,13 +175,37 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   for (final category in TaskCategory.values)
                     ChoiceChip(
+                      key: ValueKey('task-library-category-${category.name}'),
                       label: Text(category.displayName),
+                      showCheckmark: false,
                       selected: _selectedCategory == category,
+                      labelStyle: theme.textTheme.labelLarge?.copyWith(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: _selectedCategory == category
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                      materialTapTargetSize: MaterialTapTargetSize.padded,
+                      backgroundColor: theme.colorScheme.surfaceContainerLow,
+                      selectedColor: theme.colorScheme.primary,
+                      side: BorderSide(
+                        color: _selectedCategory == category
+                            ? Colors.transparent
+                            : theme.colorScheme.outlineVariant,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
                       onSelected: _isSavingNewTask
                           ? null
                           : (isSelected) {
@@ -197,12 +223,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              _LibrarySectionHeader(
-                title: _selectedCategory.displayName,
-                subtitle: categoryItems.isEmpty
-                    ? null
-                    : '$favoriteCount favorite${favoriteCount == 1 ? '' : 's'} • $defaultCount starter${defaultCount == 1 ? '' : 's'}',
-              ),
+              _LibrarySectionHeader(title: _selectedCategory.displayName),
               const SizedBox(height: 10),
               if (categoryItems.isEmpty)
                 _EmptyLibraryCard(
@@ -220,16 +241,19 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                     description: item.description,
                     category: item.category,
                     isFavorite: item.isFavorite,
-                    isDefault: item.isDefault,
+                    isStarter: item.isStarter,
                     onAdd: _isSavingNewTask
                         ? null
                         : () => _activateCatalogItem(item),
                     onFavoriteToggle: _isSavingNewTask
                         ? null
                         : () => _toggleFavorite(item),
-                      onDelete: item.isDefault || _isSavingNewTask
-                          ? null
-                          : () => _deleteCatalogItem(item),
+                    onStarterToggle: _isSavingNewTask
+                        ? null
+                        : () => _toggleStarter(item),
+                    onDelete: item.isDefault || _isSavingNewTask
+                        ? null
+                        : () => _deleteCatalogItem(item),
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -339,29 +363,20 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 }
 
 class _LibrarySectionHeader extends StatelessWidget {
-  const _LibrarySectionHeader({required this.title, required this.subtitle});
+  const _LibrarySectionHeader({required this.title});
 
   final String title;
-  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        if (subtitle != null) ...[
-          const SizedBox(height: 4),
-          Text(subtitle!, style: theme.textTheme.bodyMedium),
-        ],
-      ],
+    return Text(
+      title,
+      style: theme.textTheme.headlineSmall?.copyWith(
+        fontSize: 24,
+        fontWeight: FontWeight.w900,
+      ),
     );
   }
 }
@@ -406,9 +421,10 @@ class _LibraryTaskCard extends StatelessWidget {
     required this.description,
     required this.category,
     required this.isFavorite,
-    required this.isDefault,
+    required this.isStarter,
     required this.onAdd,
     required this.onFavoriteToggle,
+    required this.onStarterToggle,
     required this.onDelete,
   });
 
@@ -416,9 +432,10 @@ class _LibraryTaskCard extends StatelessWidget {
   final String description;
   final TaskCategory category;
   final bool isFavorite;
-  final bool isDefault;
+  final bool isStarter;
   final VoidCallback? onAdd;
   final VoidCallback? onFavoriteToggle;
+  final VoidCallback? onStarterToggle;
   final VoidCallback? onDelete;
 
   @override
@@ -440,8 +457,10 @@ class _LibraryTaskCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontSize: 20,
+                          height: 1.2,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -454,13 +473,12 @@ class _LibraryTaskCard extends StatelessWidget {
                             color: theme.colorScheme.surfaceContainerHighest,
                             textColor: theme.colorScheme.onSurfaceVariant,
                           ),
-                          _LibraryTag(
-                            label: isDefault ? 'Starter' : 'Custom',
-                            color: isDefault
-                                ? theme.colorScheme.tertiaryContainer
-                                : theme.colorScheme.secondaryContainer,
-                            textColor: theme.colorScheme.onSurfaceVariant,
-                          ),
+                          if (isStarter)
+                            _LibraryTag(
+                              label: 'Starter',
+                              color: theme.colorScheme.primaryContainer,
+                              textColor: theme.colorScheme.onPrimaryContainer,
+                            ),
                           if (isFavorite)
                             _LibraryTag(
                               label: 'Favorite',
@@ -473,19 +491,38 @@ class _LibraryTaskCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Semantics(
-                  button: true,
-                  label: isFavorite
-                      ? 'Remove from favorites'
-                      : 'Mark as favorite',
-                  child: IconButton.filledTonal(
-                    onPressed: onFavoriteToggle,
-                    icon: Icon(
-                      isFavorite
-                          ? Icons.star_rounded
-                          : Icons.star_border_rounded,
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    Semantics(
+                      button: true,
+                      label: isFavorite
+                          ? 'Remove from favorites'
+                          : 'Mark as favorite',
+                      child: IconButton.filledTonal(
+                        onPressed: onFavoriteToggle,
+                        icon: Icon(
+                          isFavorite
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                        ),
+                      ),
                     ),
-                  ),
+                    Semantics(
+                      button: true,
+                      label: isStarter
+                          ? 'Remove starter task'
+                          : 'Mark as starter task',
+                      child: IconButton.filledTonal(
+                        onPressed: onStarterToggle,
+                        icon: Icon(
+                          isStarter
+                              ? Icons.play_circle_rounded
+                              : Icons.play_circle_outline_rounded,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -493,7 +530,8 @@ class _LibraryTaskCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 description,
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontSize: 15.5,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -542,9 +580,9 @@ class _LibraryTag extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
           color: textColor,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

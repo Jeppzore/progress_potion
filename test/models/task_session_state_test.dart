@@ -29,6 +29,7 @@ void main() {
       category: TaskCategory.study,
       description: 'Read one chapter.',
       isFavorite: true,
+      isStarter: true,
       isDefault: false,
       sortOrder: 7,
       completedCount: 4,
@@ -41,6 +42,7 @@ void main() {
     expect(decoded.category, catalogItem.category);
     expect(decoded.description, catalogItem.description);
     expect(decoded.isFavorite, isTrue);
+    expect(decoded.isStarter, isTrue);
     expect(decoded.isDefault, isFalse);
     expect(decoded.sortOrder, 7);
     expect(decoded.completedCount, 4);
@@ -62,6 +64,7 @@ void main() {
           id: 'catalog-work-task',
           title: 'Work task',
           category: TaskCategory.work,
+          isStarter: true,
           sortOrder: 0,
           completedCount: 2,
         ),
@@ -89,6 +92,8 @@ void main() {
       'catalog-work-task',
       'catalog-home-task',
     ]);
+    expect(decoded.catalogItems.first.isStarter, isTrue);
+    expect(decoded.catalogItems.last.isStarter, isFalse);
     expect(decoded.catalogItems.first.completedCount, 2);
     expect(decoded.totalXp, 85);
     expect(decoded.stats.strength, 2);
@@ -168,6 +173,22 @@ void main() {
 
     expect(decoded.catalogItems.single.completedCount, 0);
     expect(decoded.catalogItems.single.isFavorite, isTrue);
+    expect(decoded.catalogItems.single.isStarter, isFalse);
+  });
+
+  test('TaskCatalogItem defaults starter state from legacy default items', () {
+    final decoded = TaskCatalogItem.fromJson({
+      'id': 'catalog-built-in',
+      'title': 'Built in',
+      'description': '',
+      'category': 'work',
+      'isFavorite': false,
+      'isDefault': true,
+      'sortOrder': 0,
+    });
+
+    expect(decoded.isDefault, isTrue);
+    expect(decoded.isStarter, isTrue);
   });
 
   test('TaskSessionState migrates schema v1 sessions with zeroed stats', () {

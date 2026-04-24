@@ -57,7 +57,8 @@ class CompletedTasksScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Completed',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: 24,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -66,7 +67,10 @@ class CompletedTasksScreen extends StatelessWidget {
                     const _EmptyStateCard(title: 'Nothing completed yet')
                   else
                     for (final task in completedTasks) ...[
-                      TaskTile(task: task),
+                      TaskTile(
+                        task: task,
+                        isStarter: taskController.isTaskStarter(task.id),
+                      ),
                       const SizedBox(height: 10),
                     ],
                 ],

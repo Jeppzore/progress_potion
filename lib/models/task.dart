@@ -33,6 +33,7 @@ class TaskCatalogItem {
     required this.category,
     this.description = '',
     this.isFavorite = false,
+    this.isStarter = false,
     this.isDefault = false,
     this.sortOrder = 0,
     this.completedCount = 0,
@@ -43,6 +44,7 @@ class TaskCatalogItem {
   final TaskCategory category;
   final String description;
   final bool isFavorite;
+  final bool isStarter;
   final bool isDefault;
   final int sortOrder;
   final int completedCount;
@@ -53,6 +55,7 @@ class TaskCatalogItem {
     TaskCategory? category,
     String? description,
     bool? isFavorite,
+    bool? isStarter,
     bool? isDefault,
     int? sortOrder,
     int? completedCount,
@@ -63,6 +66,7 @@ class TaskCatalogItem {
       category: category ?? this.category,
       description: description ?? this.description,
       isFavorite: isFavorite ?? this.isFavorite,
+      isStarter: isStarter ?? this.isStarter,
       isDefault: isDefault ?? this.isDefault,
       sortOrder: sortOrder ?? this.sortOrder,
       completedCount: completedCount ?? this.completedCount,
@@ -86,6 +90,7 @@ class TaskCatalogItem {
       'description': description,
       'category': category.storageValue,
       'isFavorite': isFavorite,
+      'isStarter': isStarter,
       'isDefault': isDefault,
       'sortOrder': sortOrder,
       'completedCount': completedCount,
@@ -97,6 +102,7 @@ class TaskCatalogItem {
     final title = json['title'];
     final description = json['description'];
     final isFavorite = json['isFavorite'];
+    final isStarter = json['isStarter'];
     final isDefault = json['isDefault'];
     final sortOrder = json['sortOrder'] ?? json['createdAt'] ?? 0;
     final completedCount = json['completedCount'] ?? 0;
@@ -125,6 +131,14 @@ class TaskCatalogItem {
       throw const FormatException('Catalog item default flag must be bool.');
     }
 
+    final effectiveIsStarter = switch (isStarter) {
+      null => isDefault,
+      bool value => value,
+      _ => throw const FormatException(
+        'Catalog item starter flag must be bool.',
+      ),
+    };
+
     if (sortOrder is! int || sortOrder < 0) {
       throw const FormatException(
         'Catalog item sort order must be a non-negative int.',
@@ -143,6 +157,7 @@ class TaskCatalogItem {
       category: TaskCategory.fromStorageValue(json['category']),
       description: description,
       isFavorite: isFavorite,
+      isStarter: effectiveIsStarter,
       isDefault: isDefault,
       sortOrder: sortOrder,
       completedCount: completedCount,
@@ -153,6 +168,7 @@ class TaskCatalogItem {
     Task task, {
     String? id,
     bool isFavorite = false,
+    bool isStarter = false,
     bool isDefault = false,
     int sortOrder = 0,
     int completedCount = 0,
@@ -163,6 +179,7 @@ class TaskCatalogItem {
       category: task.category,
       description: task.description,
       isFavorite: isFavorite,
+      isStarter: isStarter,
       isDefault: isDefault,
       sortOrder: sortOrder,
       completedCount: completedCount,

@@ -29,6 +29,10 @@ void main() {
       controller.getCatalogByCategory(TaskCategory.work).single.isDefault,
       isTrue,
     );
+    expect(
+      controller.getCatalogByCategory(TaskCategory.work).single.isStarter,
+      isTrue,
+    );
   });
 
   test(
@@ -113,6 +117,28 @@ void main() {
     expect(studyItems.first.id, second.id);
     expect(studyItems.first.isFavorite, isTrue);
     expect(studyItems.any((item) => item.id == first.id), isTrue);
+  });
+
+  test('toggleStarter persists starter state without reordering the category', () async {
+    await controller.loadTasks();
+
+    final first = await controller.createCatalogItem(
+      title: 'Study warmup',
+      category: TaskCategory.study,
+    );
+    final second = await controller.createCatalogItem(
+      title: 'Study deep dive',
+      category: TaskCategory.study,
+    );
+
+    await controller.toggleStarter(first.id);
+
+    final studyItems = controller.getCatalogByCategory(TaskCategory.study);
+    expect(studyItems.map((item) => item.id), [second.id, first.id]);
+    expect(
+      studyItems.singleWhere((item) => item.id == first.id).isStarter,
+      isTrue,
+    );
   });
 
   test(
@@ -316,6 +342,14 @@ void main() {
           .completedCount,
       1,
     );
+    expect(
+      controller.activeTasks.where((task) => task.title == 'Refill water flask'),
+      hasLength(1),
+    );
+    expect(
+      controller.activeTasks.where((task) => task.title == 'Ship one tiny step'),
+      hasLength(1),
+    );
   });
 
   test(
@@ -362,6 +396,24 @@ void main() {
     );
   });
 
+  test('markTaskAsStarter reuses an existing catalog item', () async {
+    await controller.loadTasks();
+
+    await controller.markTaskAsStarter('refill-water-flask');
+
+    final item = controller.catalogItems.singleWhere(
+      (item) => item.id == 'catalog-refill-water-flask',
+    );
+    expect(item.isStarter, isTrue);
+    expect(controller.isTaskStarter('refill-water-flask'), isTrue);
+    expect(
+      controller.catalogItems.where(
+        (item) => item.title == 'Refill water flask',
+      ),
+      hasLength(1),
+    );
+  });
+
   test(
     'markTaskAsFavorite creates a favorite for an active-only task',
     () async {
@@ -393,6 +445,83 @@ void main() {
       expect(seededController.isTaskFavorite('active-only'), isTrue);
     },
   );
+
+  test(
+    'markTaskAsStarter creates a starter for an active-only task',
+    () async {
+      final seededController = TaskController(
+        taskService: InMemoryTaskService(
+          initialState: TaskSessionState(
+            tasks: const [
+              Task(
+                id: 'active-only',
+                title: 'Active only',
+                category: TaskCategory.home,
+                description: 'Not saved yet.',
+              ),
+            ],
+            catalogItems: const [],
+            totalXp: 0,
+            stats: CharacterStats.zero,
+            potionChargeCategories: const [],
+          ),
+        ),
+      );
+      await seededController.loadTasks();
+
+      await seededController.markTaskAsStarter('active-only');
+
+      expect(seededController.catalogItems, hasLength(1));
+      expect(seededController.catalogItems.single.title, 'Active only');
+      expect(seededController.catalogItems.single.isStarter, isTrue);
+      expect(seededController.isTaskStarter('active-only'), isTrue);
+    },
+  );
+
+  test('completeTask respawns a starter task after completion', () async {
+    await controller.loadTasks();
+
+    await controller.completeTask('refill-water-flask');
+
+    expect(
+      controller.completedTasks.where((task) => task.id == 'refill-water-flask'),
+      hasLength(1),
+    );
+    expect(
+      controller.activeTasks.where((task) => task.title == 'Refill water flask'),
+      hasLength(1),
+    );
+    expect(
+      controller.activeTasks.singleWhere(
+        (task) => task.title == 'Refill water flask',
+      ).id,
+      isNot('refill-water-flask'),
+    );
+  });
+
+  test('completeTask leaves non-starter tasks completed without respawning', () async {
+    await controller.loadTasks();
+
+    final created = await controller.createCatalogItem(
+      title: 'One-off admin task',
+      category: TaskCategory.work,
+    );
+    await controller.activateCatalogItem(created.id);
+
+    final activeTask = controller.activeTasks.firstWhere(
+      (task) => task.title == 'One-off admin task',
+    );
+    await controller.completeTask(activeTask.id);
+
+    expect(
+      controller.completedTasks.where((task) => task.title == 'One-off admin task'),
+      hasLength(1),
+    );
+    expect(
+      controller.activeTasks.where((task) => task.title == 'One-off admin task'),
+      isEmpty,
+    );
+  });
 
   test(
     'drinkPotion adds XP, grants stat gains, and preserves overflow categories',

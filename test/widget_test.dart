@@ -310,7 +310,7 @@ void main() {
       await tester.pump();
 
       expect(feedbackSoundPlayer.playedSounds, [FeedbackSound.taskComplete]);
-      expect(find.text('Refill water flask'), findsNothing);
+      expect(find.text('Refill water flask'), findsOneWidget);
 
       await tester.tap(find.text('Completed'));
       await tester.pump(const Duration(milliseconds: 100));
@@ -341,7 +341,7 @@ void main() {
         ),
         isTrue,
       );
-      expect(find.text('Refill water flask'), findsNothing);
+      expect(find.text('Refill water flask'), findsOneWidget);
     },
   );
 
@@ -681,7 +681,7 @@ void main() {
   );
 
   testWidgets(
-    'shows a compact task library, sorts favorites first, and keeps new tasks in the library',
+    'shows a larger task library category picker, sorts favorites first, and keeps new tasks in the library',
     (WidgetTester tester) async {
       final controller = _FakeLibraryTaskController();
 
@@ -696,6 +696,18 @@ void main() {
       expect(find.text('Task library'), findsOneWidget);
       expect(find.widgetWithText(ChoiceChip, 'Fitness'), findsOneWidget);
       expect(find.widgetWithText(ChoiceChip, 'Study'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('task-library-category-study'))).height,
+        greaterThanOrEqualTo(48),
+      );
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.byKey(const ValueKey('task-library-category-fitness')),
+            )
+            .showCheckmark,
+        isFalse,
+      );
 
       await tester.tap(find.widgetWithText(ChoiceChip, 'Study'));
       await tester.pumpAndSettle();
@@ -705,6 +717,10 @@ void main() {
       expect(favoriteTop.dy, lessThan(starterBelow.dy));
       expect(find.byIcon(Icons.star_rounded), findsOneWidget);
       expect(find.byIcon(Icons.star_border_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.play_circle_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.play_circle_outline_rounded), findsOneWidget);
+      expect(find.textContaining('favorites'), findsNothing);
+      expect(find.textContaining('starters'), findsNothing);
 
       await tester.ensureVisible(find.byIcon(Icons.star_border_rounded));
       await tester.pumpAndSettle();
@@ -715,6 +731,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(controller.toggledFavoriteIds, ['study-starter']);
+
+      await tester.ensureVisible(find.byIcon(Icons.play_circle_outline_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byIcon(Icons.play_circle_outline_rounded).first,
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.toggledStarterIds, ['study-favorite']);
 
       await tester.tap(find.text('Create new task'));
       await tester.pumpAndSettle();
@@ -872,6 +898,42 @@ void main() {
     },
   );
 
+  testWidgets('active task starter action keeps the task active after completion', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester);
+
+    await _scrollToText(tester, 'Active Tasks');
+    await tester.scrollUntilVisible(
+      find.widgetWithText(TextButton, '+ Starter').first,
+      80,
+      scrollable: _activeTasksScrollable(),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '+ Starter').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Starter'), findsWidgets);
+    expect(find.text('Saved as a starter task.'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.widgetWithText(FilledButton, 'Complete').first,
+      80,
+      scrollable: _activeTasksScrollable(),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Refill water flask'), findsOneWidget);
+
+    await tester.tap(find.text('Completed'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Refill water flask'), findsOneWidget);
+    expect(find.text('Starter'), findsWidgets);
+  });
+
   testWidgets('failed library saves recover the create form for retry', (
     WidgetTester tester,
   ) async {
@@ -916,7 +978,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('task tiles expose a remove action for active tasks', (
+  testWidgets('task tiles expose remove and starter actions with larger titles', (
     WidgetTester tester,
   ) async {
     var removed = false;
@@ -937,6 +999,7 @@ void main() {
               onRemove: () {
                 removed = true;
               },
+              onStarter: () {},
             ),
           ),
         ),
@@ -946,6 +1009,11 @@ void main() {
 
     expect(find.text('Complete'), findsOneWidget);
     expect(find.text('Remove'), findsOneWidget);
+    expect(find.text('+ Starter'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('Plan the stand-up')).style?.fontSize,
+      20,
+    );
 
     await tester.tap(find.text('Remove'));
     await tester.pump();
@@ -1064,21 +1132,24 @@ void main() {
     expect(find.text('Total XP now: 45'), findsOneWidget);
   });
 
-  testWidgets('shows empty state in controller terms when all tasks are done', (
+  testWidgets('starter seed tasks stay active after completion', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester);
 
     final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
 
-    while (homeScreen.taskController.activeTasks.isNotEmpty) {
-      await _completeVisibleTask(tester);
-    }
+    await _completeVisibleTask(tester);
+    await _completeVisibleTask(tester);
 
-    expect(homeScreen.taskController.activeTasks, isEmpty);
+    expect(homeScreen.taskController.activeTasks, isNotEmpty);
+    expect(
+      homeScreen.taskController.activeTasks.map((task) => task.title),
+      containsAll(['Refill water flask', 'Ship one tiny step']),
+    );
     expect(homeScreen.taskController.potionChargeCount, 3);
     expect(homeScreen.taskController.totalXp, 0);
-    expect(find.text('No active tasks'), findsOneWidget);
+    expect(find.text('No active tasks'), findsNothing);
 
     await tester.tap(find.text('Completed'));
     await tester.pumpAndSettle();
@@ -1247,6 +1318,7 @@ class _FakeLibraryTaskController extends TaskController {
         title: 'Water break',
         category: TaskCategory.fitness,
         description: 'Take a quick reset between blocks.',
+        isStarter: true,
         isDefault: true,
       ),
       TaskCatalogItem(
@@ -1263,6 +1335,7 @@ class _FakeLibraryTaskController extends TaskController {
         title: 'Draft checklist',
         category: TaskCategory.study,
         description: 'Keep the next action obvious.',
+        isStarter: true,
         isDefault: true,
       ),
       TaskCatalogItem(
@@ -1279,6 +1352,7 @@ class _FakeLibraryTaskController extends TaskController {
   String? createdTaskTitle;
   TaskCategory? createdTaskCategory;
   final List<String> toggledFavoriteIds = <String>[];
+  final List<String> toggledStarterIds = <String>[];
 
   @override
   bool get isLoading => false;
@@ -1333,6 +1407,35 @@ class _FakeLibraryTaskController extends TaskController {
     }
 
     final updatedItem = item.copyWith(isFavorite: !item.isFavorite);
+    for (final entry in _itemsByCategory.entries) {
+      final index = entry.value.indexWhere(
+        (catalogItem) => catalogItem.id == id,
+      );
+      if (index != -1) {
+        entry.value[index] = updatedItem;
+        break;
+      }
+    }
+    notifyListeners();
+  }
+
+  @override
+  Future<void> toggleStarter(String id) async {
+    toggledStarterIds.add(id);
+    TaskCatalogItem? item;
+    for (final catalogItem in _itemsByCategory.values.expand(
+      (items) => items,
+    )) {
+      if (catalogItem.id == id) {
+        item = catalogItem;
+        break;
+      }
+    }
+    if (item == null) {
+      return;
+    }
+
+    final updatedItem = item.copyWith(isStarter: !item.isStarter);
     for (final entry in _itemsByCategory.entries) {
       final index = entry.value.indexWhere(
         (catalogItem) => catalogItem.id == id,

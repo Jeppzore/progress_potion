@@ -97,8 +97,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       Expanded(
                         child: Text(
                           'Favorites',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w900),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                              ),
                         ),
                       ),
                       SegmentedButton<FavoriteSort>(
@@ -188,8 +191,10 @@ class _FavoriteTaskCard extends StatelessWidget {
                     children: [
                       Text(
                         item.title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontSize: 20,
+                          height: 1.2,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -207,6 +212,12 @@ class _FavoriteTaskCard extends StatelessWidget {
                             color: theme.colorScheme.primaryContainer,
                             textColor: theme.colorScheme.onSurfaceVariant,
                           ),
+                          if (item.isStarter)
+                            _FavoriteTag(
+                              label: 'Starter',
+                              color: theme.colorScheme.secondaryContainer,
+                              textColor: theme.colorScheme.onSurfaceVariant,
+                            ),
                           if (isActive)
                             _FavoriteTag(
                               label: 'Active',
@@ -224,7 +235,8 @@ class _FavoriteTaskCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 item.description,
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontSize: 15.5,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -270,9 +282,9 @@ class _FavoriteTag extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
           color: textColor,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
